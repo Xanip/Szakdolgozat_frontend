@@ -1,3 +1,21 @@
+/* ==========================================================================
+   Currency Lens — global stylesheet
+
+   Section map:
+     1. External imports      Tailwind, animations, shadcn, fonts
+     2. Tailwind theme bridge  maps semantic tokens to Tailwind utilities
+     3. Design tokens          light (:root) and dark (.dark) color palettes
+     4. Layout tokens          non-color shell sizing (sidebar width, etc.)
+     5. Tailwind base layer    element-level defaults
+     6. Global reset           box-sizing, body, focus ring
+     7. App shell              top-level shell + main content offset
+     8. Sidebar                brand, navigation links, collapse control
+     9. Header                 page title, kicker, icon buttons
+    10. Content & placeholder  content container + page placeholder card
+    11. Responsive             mobile drawer behaviour (<= 720px)
+   ========================================================================== */
+
+/* 1. External imports ------------------------------------------------------ */
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -5,6 +23,11 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* 2. Tailwind theme bridge -------------------------------------------------
+   Exposes the semantic CSS variables (defined in section 3) as Tailwind
+   theme values, so utilities like `bg-background` or `text-foreground`
+   resolve to the active theme. Do not hardcode colors in components; use
+   these tokens instead. */
 @theme inline {
     --font-heading: var(--font-sans);
     --font-sans: 'Geist Variable', sans-serif;
@@ -48,75 +71,92 @@
     --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* 3. Design tokens ---------------------------------------------------------
+   The warm, beige color palette. These are the single source of truth for
+   theme colors; `:root` holds the light theme, `.dark` overrides for dark.
+   Values are initial design decisions and may be tuned for contrast. */
+
+/* 3a. Light theme */
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
+  --background: #F5F1E8;
+  --foreground: #302B25;
+  --card: #FFFCF6;
+  --card-foreground: #302B25;
+  --popover: #FFFCF6;
+  --popover-foreground: #302B25;
+  --primary: #A66A4C;
+  --primary-foreground: #FFFFFF;
+  --secondary: #EEE7DB;
+  --secondary-foreground: #302B25;
+  --muted: #E8D5C6;
+  --muted-foreground: #746B60;
+  --accent: #E8D5C6;
+  --accent-foreground: #302B25;
+  --destructive: #B94A48;
+  --border: #E0D7C9;
+  --input: #E0D7C9;
+  --ring: #A66A4C;
+  --chart-1: #A66A4C;
+  --chart-2: #6B8E88;
+  --chart-3: #C4965A;
+  --chart-4: #8C6F91;
+  --chart-5: #526B7A;
+  --radius: 0.5rem;
+  --sidebar: #EEE7DB;
+  --sidebar-foreground: #302B25;
+  --sidebar-primary: #A66A4C;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #E8D5C6;
+  --sidebar-accent-foreground: #302B25;
+  --sidebar-border: #E0D7C9;
+  --sidebar-ring: #A66A4C;
 }
 
+/* 3b. Dark theme */
 .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
+  --background: #25231F;
+  --foreground: #F5F1E8;
+  --card: #312E28;
+  --card-foreground: #F5F1E8;
+  --popover: #312E28;
+  --popover-foreground: #F5F1E8;
+  --primary: #D6A17D;
+  --primary-foreground: #25231F;
+  --secondary: #3A352E;
+  --secondary-foreground: #F5F1E8;
+  --muted: #57463A;
+  --muted-foreground: #C2B8A9;
+  --accent: #57463A;
+  --accent-foreground: #F5F1E8;
+  --destructive: #E07A73;
+  --border: #494239;
+  --input: #494239;
+  --ring: #D6A17D;
+  --chart-1: #D6A17D;
+  --chart-2: #8FAEA6;
+  --chart-3: #D1AA70;
+  --chart-4: #B19AB4;
+  --chart-5: #8DA7B7;
+  --sidebar: #312E28;
+  --sidebar-foreground: #F5F1E8;
+  --sidebar-primary: #D6A17D;
+  --sidebar-primary-foreground: #25231F;
+  --sidebar-accent: #57463A;
+  --sidebar-accent-foreground: #F5F1E8;
+  --sidebar-border: #494239;
+  --sidebar-ring: #D6A17D;
 }
 
+/* 4. Layout tokens ---------------------------------------------------------
+   Non-color shell dimensions. The sidebar width and the main-content offset
+   are kept in sync through these variables, so resizing the sidebar is a
+   single edit here rather than four scattered values. */
+:root {
+  --sidebar-width: 200px;            /* expanded sidebar width */
+  --sidebar-width-collapsed: 80px;   /* collapsed (icon-only) sidebar width */
+}
+
+/* 5. Tailwind base layer --------------------------------------------------- */
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -126,5 +166,84 @@
     }
   html {
     @apply font-sans;
+    background: var(--background);
+    color-scheme: light;
     }
+  html.dark {
+    color-scheme: dark;
+    }
+}
+
+/* 6. Global reset ---------------------------------------------------------- */
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; }
+button, a { -webkit-tap-highlight-color: transparent; }
+button:focus-visible, a:focus-visible { outline: 3px solid var(--ring); outline-offset: 3px; }
+
+/* 7. App shell -------------------------------------------------------------
+   Full-height shell. `.app-main` is offset by the sidebar width so content
+   never sits underneath the fixed sidebar; the offset shrinks when collapsed. */
+.app-shell { min-height: 100vh; background: var(--background); color: var(--foreground); }
+.app-main { min-height: 100vh; margin-left: var(--sidebar-width); transition: margin-left 180ms ease; }
+.app-main-collapsed { margin-left: var(--sidebar-width-collapsed); }
+
+/* 8. Sidebar ---------------------------------------------------------------
+   Fixed, collapsible left navigation: brand block, nav links, and the
+   collapse control. Collapsed state centers items and hides text labels. */
+.sidebar { position: fixed; inset: 0 auto 0 0; z-index: 30; display: flex; width: var(--sidebar-width); flex-direction: column; border-right: 1px solid var(--sidebar-border); background: var(--sidebar); transition: width 180ms ease; }
+.sidebar-collapsed { width: var(--sidebar-width-collapsed); }
+.sidebar-brand { display: flex; height: 88px; align-items: center; gap: 12px; border-bottom: 1px solid var(--sidebar-border); padding: 20px; font-family: var(--font-heading); font-size: 1rem; font-weight: 650; letter-spacing: 0.01em; }
+.brand-mark { display: grid; height: 36px; width: 36px; flex: 0 0 auto; place-items: center; border-radius: 10px; background: var(--primary); color: var(--primary-foreground); font-size: 0.75rem; font-weight: 800; letter-spacing: 0.08em; }
+.sidebar-nav { display: flex; flex: 1; flex-direction: column; gap: 5px; padding: 28px 14px; }
+.nav-link, .collapse-button { display: flex; min-height: 44px; align-items: center; gap: 12px; border: 0; border-radius: 7px; color: var(--sidebar-foreground); background: transparent; padding: 10px 12px; font: inherit; text-decoration: none; transition: background 150ms ease, color 150ms ease; }
+.nav-link svg, .collapse-button svg { width: 19px; flex: 0 0 auto; }
+.nav-link:hover, .collapse-button:hover { background: color-mix(in srgb, var(--sidebar-accent) 65%, transparent); }
+.nav-link-active { background: var(--sidebar-accent); color: var(--primary); font-weight: 650; }
+.collapse-button { margin: 14px; border-top: 1px solid var(--sidebar-border); border-radius: 0; padding: 15px 12px; color: var(--muted-foreground); }
+.sidebar-collapsed .sidebar-brand, .sidebar-collapsed .nav-link, .sidebar-collapsed .collapse-button { justify-content: center; }
+.sidebar-collapsed .sidebar-brand { padding: 20px 12px; }
+.sidebar-collapsed .sidebar-nav { padding-inline: 12px; }
+
+/* 9. Header ----------------------------------------------------------------
+   Lightweight page header: kicker, title, description, and icon buttons
+   (theme toggle, mobile nav trigger). Uppercase labels share one token. */
+.app-header { display: flex; min-height: 100px; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 1px solid var(--border); padding: 32px clamp(24px, 5vw, 72px); }
+.header-heading { display: flex; align-items: flex-start; gap: 16px; }
+.header-kicker { margin: 0 0 8px; }
+.app-header h1 { margin: 0; font-family: var(--font-heading); font-size: clamp(1.5rem, 2.5vw, 2.1rem); letter-spacing: -0.02em; }
+.app-header p:last-child { margin: 8px 0 0; color: var(--muted-foreground); font-size: 0.9rem; }
+.nav-label, .header-kicker, .eyebrow { color: var(--muted-foreground); font-size: 0.69rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
+.nav-label { padding: 0 12px 10px; }
+.icon-button, .mobile-menu, .mobile-close { display: grid; height: 42px; width: 42px; place-items: center; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--foreground); cursor: pointer; }
+.icon-button:hover, .mobile-menu:hover { border-color: var(--primary); color: var(--primary); }
+.icon-button svg, .mobile-menu svg, .mobile-close svg { width: 18px; }
+
+/* 10. Content & placeholder ------------------------------------------------
+   Main content container plus the temporary per-route placeholder card used
+   until each analytics page is implemented. */
+.content-area { padding: clamp(24px, 5vw, 72px); }
+.placeholder { max-width: 760px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); padding: clamp(28px, 6vw, 64px); }
+.placeholder-icon { display: grid; height: 48px; width: 48px; place-items: center; border-radius: 10px; background: var(--muted); color: var(--primary); }
+.placeholder-icon svg { width: 24px; }
+.placeholder .eyebrow { margin: 34px 0 10px; }
+.placeholder h2 { margin: 0; font-family: var(--font-heading); font-size: clamp(1.6rem, 3vw, 2.35rem); }
+.placeholder-copy { max-width: 480px; margin: 14px 0 0; color: var(--muted-foreground); line-height: 1.7; }
+
+/* 11. Responsive -----------------------------------------------------------
+   On narrow screens (<= 720px) the sidebar becomes an off-canvas drawer with
+   a click-away backdrop, and the main content reclaims the full width.
+   Drawer-only controls (.mobile-menu, .mobile-close, .sidebar-backdrop) are
+   hidden by default and only shown here. */
+.mobile-menu, .mobile-close, .sidebar-backdrop { display: none; }
+
+@media (max-width: 720px) {
+  .sidebar { width: min(var(--sidebar-width), 86vw); transform: translateX(-100%); transition: transform 180ms ease; }
+  .sidebar-mobile-open { transform: translateX(0); }
+  .sidebar-backdrop { position: fixed; inset: 0; z-index: 20; display: block; border: 0; background: rgb(20 18 15 / 45%); }
+  .mobile-close { display: grid; margin-left: auto; border: 0; background: transparent; }
+  .app-main, .app-main-collapsed { margin-left: 0; }
+  .app-header { min-height: 132px; padding: 24px 20px; }
+  .header-heading { gap: 10px; }
+  .mobile-menu { display: grid; flex: 0 0 auto; }
+  .content-area { padding: 20px; }
 }
