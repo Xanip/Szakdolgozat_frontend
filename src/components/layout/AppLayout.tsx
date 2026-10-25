@@ -4,10 +4,11 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { DimensionDataGate } from "@/components/layout/DimensionDataGate";
-import { PagePlaceholder } from "@/components/layout/PagePlaceholder";
-import { SecondPagePlaceholder } from "@/components/layout/SecondPagePlaceholder";
 import { useTheme } from "@/hooks/useTheme";
 import { defaultRoutePath, routes } from "@/lib/routes";
+import { FxPerformancePage } from "../pages/fx_performance";
+import { DailyHeatmapsPage } from "../pages/daily_heatmap";
+import { MediaAnalyticsPage } from "../pages/media_analitics";
 
 /**
  * Application shell: sidebar + header + routed main content.
@@ -63,17 +64,17 @@ export function AppLayout() {
               <Route
                 key="/exchange-rates"
                 path="/exchange-rates"
-                element={<PagePlaceholder route={routes[0]}/>}
+                element={<FxPerformancePage route={routes[0]}/>}
               />
               <Route
                 key="/daily-heatmap"
                 path="/daily-heatmap"
-                element={<SecondPagePlaceholder route={routes[1]}/>}
+                element={<DailyHeatmapsPage route={routes[1]}/>}
               />
               <Route
                 key="/media-analytics"
                 path="/media-analytics"
-                element={<PagePlaceholder route={routes[2]}/>}
+                element={<MediaAnalyticsPage route={routes[2]}/>}
               />
             </Routes>
           </DimensionDataGate>

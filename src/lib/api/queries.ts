@@ -1,4 +1,4 @@
-import { queryOptions, skipToken } from "@tanstack/react-query";
+import { keepPreviousData, queryOptions, skipToken } from "@tanstack/react-query";
 
 import { ENDPOINTS, getJson, type HttpGet, type QueryParams } from "@/lib/api/client";
 import { processDailyHeatmap } from "@/lib/api/processors/dailyHeatmap";
@@ -61,6 +61,7 @@ export function fxPerformanceQueryOptions(
 ) {
   return queryOptions({
     queryKey: queryKeys.fxPerformance(params),
+      placeholderData: keepPreviousData,
     queryFn: params
       ? createEndpointQueryFn({
           path: ENDPOINTS.fxPerformance,
@@ -79,6 +80,7 @@ export function dailyHeatmapQueryOptions(
 ) {
   return queryOptions({
     queryKey: queryKeys.dailyHeatmap(params),
+          placeholderData: keepPreviousData,
     queryFn: params
       ? createEndpointQueryFn({
           path: ENDPOINTS.dailyHeatmap,
