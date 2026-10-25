@@ -1,0 +1,112 @@
+import { queryOptions, skipToken } from "@tanstack/react-query";
+
+import { ENDPOINTS, getJson, type HttpGet, type QueryParams } from "@/lib/api/client";
+import { processDailyHeatmap } from "@/lib/api/processors/dailyHeatmap";
+import { processDimensions } from "@/lib/api/processors/dimensions";
+import { processFxPerformance } from "@/lib/api/processors/fxPerformance";
+import { processMediaAnalytics } from "@/lib/api/processors/mediaAnalytics";
+import {
+  queryKeys,
+  type DailyHeatmapParams,
+  type FxPerformanceParams,
+  type MediaAnalyticsParams,
+} from "@/lib/api/queryKeys";
+import { validateDailyHeatmapResponse } from "@/lib/api/validators/dailyHeatmap";
+import { validateDimensionsResponse } from "@/lib/api/validators/dimensions";
+import { validateFxPerformanceResponse } from "@/lib/api/validators/fxPerformance";
+import { validateMediaAnalyticsResponse } from "@/lib/api/validators/mediaAnalytics";
+
+type EndpointPipeline<TRaw, TData> = {
+  path: string;
+  params?: QueryParams;
+  validate: (body: unknown) => TRaw;
+  process: (raw: TRaw) => TData;
+  http?: HttpGet;
+};
+
+/**
+ * Builds a query function: fetch (`unknown`) → validate → process.
+ * Any failure (transport, validation, processing) rejects the query, so only
+ * fully processed data can reach the cache. The query-function context (and
+ * its abort signal) is intentionally not used; see `getJson`.
+ */
+export function createEndpointQueryFn<TRaw, TData>({
+  path,
+  params,
+  validate,
+  process,
+  http = getJson,
+}: EndpointPipeline<TRaw, TData>): () => Promise<TData> {
+  return async () => {
+    const body = await http(path, params);
+    return process(validate(body));
+  };
+}
+
+export function dimensionsQueryOptions(http?: HttpGet) {
+  return queryOptions({
+    queryKey: queryKeys.dimensions(),
+    queryFn: createEndpointQueryFn({
+      path: ENDPOINTS.dimensions,
+      validate: validateDimensionsResponse,
+      process: processDimensions,
+      http,
+    }),
+  });
+}
+
+export function fxPerformanceQueryOptions(
+  params: FxPerformanceParams | null,
+  http?: HttpGet,
+) {
+  return queryOptions({
+    queryKey: queryKeys.fxPerformance(params),
+    queryFn: params
+      ? createEndpointQueryFn({
+          path: ENDPOINTS.fxPerformance,
+          params,
+          validate: validateFxPerformanceResponse,
+          process: processFxPerformance,
+          http,
+        })
+      : skipToken,
+  });
+}
+
+export function dailyHeatmapQueryOptions(
+  params: DailyHeatmapParams | null,
+  http?: HttpGet,
+) {
+  return queryOptions({
+    queryKey: queryKeys.dailyHeatmap(params),
+    queryFn: params
+      ? createEndpointQueryFn({
+          path: ENDPOINTS.dailyHeatmap,
+          params,
+          validate: validateDailyHeatmapResponse,
+          process: processDailyHeatmap,
+          http,
+        })
+      : skipToken,
+  });
+}
+
+/** Main (`IncludeMain=true`) or cross-filtered (`IncludeMain=false`) request. */
+export function mediaAnalyticsQueryOptions(
+  params: MediaAnalyticsParams | null,
+  http?: HttpGet,
+) {
+  const mode = params?.IncludeMain ? "main" : "filtered";
+  return queryOptions({
+    queryKey: queryKeys.mediaAnalytics(params),
+    queryFn: params
+      ? createEndpointQueryFn({
+          path: ENDPOINTS.mediaAnalytics,
+          params,
+          validate: (body) => validateMediaAnalyticsResponse(body, mode),
+          process: (raw) => processMediaAnalytics(raw, mode),
+          http,
+        })
+      : skipToken,
+  });
+}

@@ -1,0 +1,471 @@
+/**
+ * Active-result lifecycle tests against a real QueryClient.
+ *
+ * A `QueryObserver` stands in for a page hook: after each committed filter
+ * change the test calls `setOptions` with the new key, exactly what `useQuery`
+ * does on re-render. Requests are resolved manually to control their order.
+ */
+import { QueryObserver, type QueryClient, type QueryKey } from "@tanstack/react-query";
+import { describe, expect, it } from "vitest";
+
+import { createAppData } from "@/lib/appData";
+import { createEndpointQueryFn, dimensionsQueryOptions, fxPerformanceQueryOptions, dailyHeatmapQueryOptions, mediaAnalyticsQueryOptions } from "@/lib/api/queries";
+import {
+  buildDailyHeatmapParams,
+  buildFxPerformanceParams,
+  buildMediaFilteredParams,
+  buildMediaMainParams,
+  getResultRole,
+  queryKeys,
+  type ResultRole,
+} from "@/lib/api/queryKeys";
+import { ResponseValidationError } from "@/lib/api/validators/guards";
+import { processFxPerformance } from "@/lib/api/processors/fxPerformance";
+import { processMediaAnalytics } from "@/lib/api/processors/mediaAnalytics";
+import { withMediaCrossFilter, withMediaDateRange } from "@/lib/filters/pageFilters";
+import type { FxPerformanceFilters, MediaCrossFilter } from "@/types/filters";
+
+import {
+  createControlledHttp,
+  rawDimensions,
+  rawFx,
+  rawHeatmap,
+  rawMediaFiltered,
+  rawMediaMain,
+  settle,
+} from "./fixtures";
+
+function entriesOf(client: QueryClient, role: ResultRole) {
+  return client
+    .getQueryCache()
+    .getAll()
+    .filter((query) => getResultRole(query.queryKey) === role);
+}
+
+function cached(client: QueryClient, key: QueryKey) {
+  return client.getQueryCache().find({ queryKey: key, exact: true });
+}
+
+const fxKey = (baseCurrency: string, targetCurrency: string) =>
+  queryKeys.fxPerformance(
+    buildFxPerformanceParams({ baseCurrency, targetCurrency, startDate: null }),
+  );
+
+function fxHarness() {
+  const transport = createControlledHttp();
+  const { queryClient, filters } = createAppData();
+  const store = filters.fxPerformance;
+  const options = () =>
+    fxPerformanceQueryOptions(
+      buildFxPerformanceParams(store.getCommitted()),
+      transport.http,
+    );
+
+  const observer = new QueryObserver(queryClient, options());
+  const unsubscribe = observer.subscribe(() => {});
+
+  /** User changes filters; the debounce elapses; the page re-renders. */
+  const select = (patch: Partial<FxPerformanceFilters>) => {
+    store.update((current) => ({ ...current, ...patch }));
+    store.flush();
+    observer.setOptions(options());
+  };
+
+  return { ...transport, queryClient, store, observer, unsubscribe, select, options };
+}
+
+describe("obsolete (late) requests", () => {
+  it("an older, slower request finishing after a newer one is neither shown nor cached", async () => {
+    const h = fxHarness();
+    h.select({ baseCurrency: "USD", targetCurrency: "HUF" }); // request A
+    const requestA = h.find({ TargetCurrency: "HUF" });
+
+    h.select({ targetCurrency: "EUR" }); // request B, A still running
+    const requestB = h.find({ TargetCurrency: "EUR" });
+    expect(h.requests).toHaveLength(2);
+
+    requestB.resolve(rawFx(2));
+    await settle();
+    expect(h.observer.getCurrentResult().data).toEqual(processFxPerformance(rawFx(2)));
+
+    // A finishes late, after B became the active result.
+    requestA.resolve(rawFx(1));
+    await settle();
+
+    expect(h.queryClient.getQueryData(fxKey("USD", "HUF"))).toBeUndefined();
+    expect(cached(h.queryClient, fxKey("USD", "HUF"))).toBeUndefined();
+    expect(h.observer.getCurrentResult().data).toEqual(processFxPerformance(rawFx(2)));
+    expect(entriesOf(h.queryClient, "fxPerformance")).toHaveLength(1);
+    h.unsubscribe();
+  });
+
+  it("an obsolete request finishing before the newer one is discarded too", async () => {
+    const h = fxHarness();
+    h.select({ baseCurrency: "USD", targetCurrency: "HUF" });
+    const requestA = h.find({ TargetCurrency: "HUF" });
+    h.select({ targetCurrency: "EUR" });
+
+    requestA.resolve(rawFx(1));
+    await settle();
+
+    expect(cached(h.queryClient, fxKey("USD", "HUF"))).toBeUndefined();
+    const current = h.observer.getCurrentResult();
+    expect(current.data).toBeUndefined(); // B still loading, A never shown
+    expect(current.isPending).toBe(true);
+
+    h.find({ TargetCurrency: "EUR" }).resolve(rawFx(2));
+    await settle();
+    expect(h.observer.getCurrentResult().data).toEqual(processFxPerformance(rawFx(2)));
+    h.unsubscribe();
+  });
+
+  it("when the newer request fails, a late older result is still not stored", async () => {
+    const h = fxHarness();
+    h.select({ baseCurrency: "USD", targetCurrency: "HUF" });
+    const requestA = h.find({ TargetCurrency: "HUF" });
+    h.select({ targetCurrency: "EUR" });
+
+    h.find({ TargetCurrency: "EUR" }).reject(new Error("network"));
+    await settle();
+    requestA.resolve(rawFx(1));
+    await settle();
+
+    expect(cached(h.queryClient, fxKey("USD", "HUF"))).toBeUndefined();
+    const current = h.observer.getCurrentResult();
+    expect(current.isError).toBe(true);
+    expect(current.data).toBeUndefined();
+    h.unsubscribe();
+  });
+});
+
+describe("navigation and cache", () => {
+  it("a request finishes after leaving the page and is shown on return without refetch or reprocessing", async () => {
+    const h = fxHarness();
+    h.select({ baseCurrency: "USD", targetCurrency: "HUF" });
+    h.unsubscribe(); // user navigates to another page
+
+    h.find({ TargetCurrency: "HUF" }).resolve(rawFx(1));
+    await settle();
+    const stored = h.queryClient.getQueryData(fxKey("USD", "HUF"));
+    expect(stored).toEqual(processFxPerformance(rawFx(1)));
+
+    // User returns: a new observer (page mount) reads the cache immediately.
+    const returned = new QueryObserver(h.queryClient, h.options());
+    const unsubscribe = returned.subscribe(() => {});
+    expect(returned.getCurrentResult().data).toBe(stored); // same processed object
+    expect(returned.getCurrentResult().isFetching).toBe(false);
+    expect(h.requests).toHaveLength(1);
+    unsubscribe();
+  });
+});
+
+describe("active result per role", () => {
+  it("USD/HUF and EUR/HUF are separate entries; the new active one replaces the old", async () => {
+    const h = fxHarness();
+    h.select({ baseCurrency: "USD", targetCurrency: "HUF" });
+    h.find({ BaseCurrency: "USD" }).resolve(rawFx(1));
+    await settle();
+    expect(h.queryClient.getQueryData(fxKey("USD", "HUF"))).toEqual(
+      processFxPerformance(rawFx(1)),
+    );
+
+    h.select({ baseCurrency: "EUR" });
+    // Until EUR/HUF succeeds, USD/HUF stays cached but is not shown for EUR/HUF.
+    expect(h.observer.getCurrentResult().data).toBeUndefined();
+    expect(cached(h.queryClient, fxKey("USD", "HUF"))).toBeDefined();
+
+    h.find({ BaseCurrency: "EUR" }).resolve(rawFx(3));
+    await settle();
+    expect(h.queryClient.getQueryData(fxKey("EUR", "HUF"))).toEqual(
+      processFxPerformance(rawFx(3)),
+    );
+    expect(cached(h.queryClient, fxKey("USD", "HUF"))).toBeUndefined();
+    expect(entriesOf(h.queryClient, "fxPerformance")).toHaveLength(1);
+    h.unsubscribe();
+  });
+
+  it("A → B → A requests A again after it was removed", async () => {
+    const h = fxHarness();
+    h.select({ baseCurrency: "USD", targetCurrency: "HUF" });
+    h.find({ TargetCurrency: "HUF" }).resolve(rawFx(1));
+    await settle();
+    h.select({ targetCurrency: "EUR" });
+    h.find({ TargetCurrency: "EUR" }).resolve(rawFx(2));
+    await settle();
+
+    h.select({ targetCurrency: "HUF" });
+    expect(h.requests).toHaveLength(3);
+    expect(h.observer.getCurrentResult().data).toBeUndefined();
+
+    h.requests[2].resolve(rawFx(5));
+    await settle();
+    expect(h.observer.getCurrentResult().data).toEqual(processFxPerformance(rawFx(5)));
+    expect(entriesOf(h.queryClient, "fxPerformance")).toHaveLength(1);
+    h.unsubscribe();
+  });
+
+  it("a failed refetch keeps the earlier successful data and reports the error", async () => {
+    const h = fxHarness();
+    h.select({ baseCurrency: "USD", targetCurrency: "HUF" });
+    h.requests[0].resolve(rawFx(1));
+    await settle();
+
+    const refetch = h.observer.refetch();
+    h.requests[1].reject(new Error("server down"));
+    await refetch;
+    await settle();
+
+    const current = h.observer.getCurrentResult();
+    expect(current.isError).toBe(true);
+    expect(current.error?.message).toBe("server down");
+    expect(current.data).toEqual(processFxPerformance(rawFx(1)));
+    h.unsubscribe();
+  });
+
+  it("an invalid first response stores no data and surfaces a validation error", async () => {
+    const h = fxHarness();
+    h.select({ baseCurrency: "USD", targetCurrency: "HUF" });
+    h.requests[0].resolve({ ...rawFx(1), todaysRate: "324" });
+    await settle();
+
+    const current = h.observer.getCurrentResult();
+    expect(current.isError).toBe(true);
+    expect(current.error).toBeInstanceOf(ResponseValidationError);
+    expect(h.queryClient.getQueryData(fxKey("USD", "HUF"))).toBeUndefined();
+    h.unsubscribe();
+  });
+
+  it("Daily Heatmap keeps one active result", async () => {
+    const transport = createControlledHttp();
+    const { queryClient, filters } = createAppData();
+    const store = filters.dailyHeatmap;
+    const options = () =>
+      dailyHeatmapQueryOptions(buildDailyHeatmapParams(store.getCommitted()), transport.http);
+    const observer = new QueryObserver(queryClient, options());
+    const unsubscribe = observer.subscribe(() => {});
+
+    transport.requests[0].resolve(rawHeatmap(["ADP"])); // initial: full heatmap
+    await settle();
+    store.update(() => ({ currencies: ["HUF", "USD"] }));
+    store.flush();
+    observer.setOptions(options());
+    transport.requests[1].resolve(rawHeatmap(["HUF", "USD"]));
+    await settle();
+
+    expect(entriesOf(queryClient, "dailyHeatmap")).toHaveLength(1);
+    expect(observer.getCurrentResult().data?.charts.X_FilterCurrencies).toEqual(["HUF", "USD"]);
+    expect(transport.requests[1].params).toEqual({ Currencies: ["HUF", "USD"] });
+    unsubscribe();
+  });
+});
+
+describe("processing errors", () => {
+  it("a processor failure is a query error and nothing is cached", async () => {
+    const transport = createControlledHttp();
+    const { queryClient } = createAppData();
+    const key = ["processing-test"];
+    const fetching = queryClient.fetchQuery({
+      queryKey: key,
+      queryFn: createEndpointQueryFn({
+        path: "/x",
+        http: transport.http,
+        validate: (body) => body,
+        process: () => {
+          throw new Error("processing failed");
+        },
+      }),
+    });
+    transport.requests[0].resolve({});
+
+    await expect(fetching).rejects.toThrow("processing failed");
+    expect(queryClient.getQueryData(key)).toBeUndefined();
+    expect(queryClient.getQueryState(key)?.status).toBe("error");
+  });
+});
+
+describe("dimension data", () => {
+  it("a failed load reports an error and a retry can succeed", async () => {
+    const transport = createControlledHttp();
+    const { queryClient } = createAppData();
+    const observer = new QueryObserver(queryClient, dimensionsQueryOptions(transport.http));
+    const unsubscribe = observer.subscribe(() => {});
+
+    transport.requests[0].reject(new Error("backend unreachable"));
+    await settle();
+    expect(observer.getCurrentResult().isError).toBe(true);
+    expect(observer.getCurrentResult().data).toBeUndefined();
+
+    const retry = observer.refetch(); // the Retry button
+    transport.requests[1].resolve(rawDimensions());
+    await retry;
+    await settle();
+    expect(observer.getCurrentResult().isSuccess).toBe(true);
+    expect(observer.getCurrentResult().data?.sources).toEqual([{ id: 24, name: "/FILM" }]);
+    unsubscribe();
+  });
+});
+
+describe("Media Analytics main/filtered lifecycle", () => {
+  function mediaHarness() {
+    const transport = createControlledHttp();
+    const { queryClient, filters } = createAppData();
+    const store = filters.mediaAnalytics;
+    const mainOptions = () =>
+      mediaAnalyticsQueryOptions(buildMediaMainParams(store.getCommitted()), transport.http);
+    const filteredOptions = () =>
+      mediaAnalyticsQueryOptions(buildMediaFilteredParams(store.getCommitted()), transport.http);
+
+    const main = new QueryObserver(queryClient, mainOptions());
+    const filtered = new QueryObserver(queryClient, { ...filteredOptions(), enabled: false });
+    const unsubscribes = [main.subscribe(() => {}), filtered.subscribe(() => {})];
+
+    /** Mirrors `useMediaAnalytics` re-rendering. */
+    const render = () => {
+      main.setOptions(mainOptions());
+      filtered.setOptions({
+        ...filteredOptions(),
+        enabled: main.getCurrentResult().data !== undefined,
+      });
+    };
+    const setDates = (startDate: string, toDate: string) => {
+      store.update((current) => withMediaDateRange(current, startDate, toDate));
+      store.flush();
+      render();
+    };
+    const setCrossFilter = (crossFilter: MediaCrossFilter | null) => {
+      store.update((current) => withMediaCrossFilter(current, crossFilter));
+      store.flush();
+      render();
+    };
+    const respond = async (match: Record<string, unknown>, body: unknown) => {
+      transport.find(match).resolve(body);
+      await settle();
+      render();
+    };
+    const cleanup = () => unsubscribes.forEach((unsubscribe) => unsubscribe());
+
+    return { ...transport, queryClient, main, filtered, setDates, setCrossFilter, respond, cleanup };
+  }
+
+  const mainData = (label: string) => processMediaAnalytics(rawMediaMain(label), "main");
+  const filteredData = (label: string) =>
+    processMediaAnalytics(rawMediaFiltered(label), "filtered");
+
+  it("stores main and cross-filtered data under separate IncludeMain keys", async () => {
+    const h = mediaHarness();
+    h.setDates("2026-08-01", "2026-10-01");
+    expect(h.requests).toHaveLength(1);
+    expect(h.requests[0].params).toMatchObject({ IncludeMain: true, SourceFilter: null });
+
+    await h.respond({ IncludeMain: true }, rawMediaMain("M1"));
+    h.setCrossFilter({ kind: "source", value: "YAHOO ENTERTAINMENT" });
+    expect(h.requests[1].params).toMatchObject({
+      IncludeMain: false,
+      SourceFilter: "YAHOO ENTERTAINMENT",
+      CategoryFilter: null,
+    });
+    await h.respond({ SourceFilter: "YAHOO ENTERTAINMENT" }, rawMediaFiltered("F1"));
+
+    expect(h.main.getCurrentResult().data).toEqual(mainData("M1"));
+    expect(h.filtered.getCurrentResult().data).toEqual(filteredData("F1"));
+    expect(entriesOf(h.queryClient, "mediaMain")).toHaveLength(1);
+    expect(entriesOf(h.queryClient, "mediaFiltered")).toHaveLength(1);
+    h.cleanup();
+  });
+
+  it("does not request filtered data before main data exists", () => {
+    const h = mediaHarness();
+    h.setDates("2026-08-01", "2026-10-01");
+    h.setCrossFilter({ kind: "category", value: "Inflation" });
+    expect(h.requests).toHaveLength(1); // only the main request
+    expect(h.filtered.getCurrentResult().fetchStatus).toBe("idle");
+    h.cleanup();
+  });
+
+  it("a late earlier cross-filter cannot replace the latest one; main stays active", async () => {
+    const h = mediaHarness();
+    h.setDates("2026-08-01", "2026-10-01");
+    await h.respond({ IncludeMain: true }, rawMediaMain("M1"));
+
+    h.setCrossFilter({ kind: "source", value: "SOURCE A" }); // first column click
+    h.setCrossFilter({ kind: "category", value: "Inflation" }); // second click
+    await h.respond({ CategoryFilter: "Inflation" }, rawMediaFiltered("CATEGORY"));
+    await h.respond({ SourceFilter: "SOURCE A" }, rawMediaFiltered("SOURCE A")); // late
+
+    expect(h.filtered.getCurrentResult().data).toEqual(filteredData("CATEGORY"));
+    expect(h.main.getCurrentResult().data).toEqual(mainData("M1"));
+    expect(entriesOf(h.queryClient, "mediaFiltered")).toHaveLength(1);
+    expect(entriesOf(h.queryClient, "mediaMain")).toHaveLength(1);
+    h.cleanup();
+  });
+
+  it("a new filtered result replaces the previous filtered result", async () => {
+    const h = mediaHarness();
+    h.setDates("2026-08-01", "2026-10-01");
+    await h.respond({ IncludeMain: true }, rawMediaMain("M1"));
+    h.setCrossFilter({ kind: "source", value: "SOURCE A" });
+    await h.respond({ SourceFilter: "SOURCE A" }, rawMediaFiltered("A"));
+    h.setCrossFilter({ kind: "source", value: "SOURCE B" });
+    expect(h.filtered.getCurrentResult().data).toBeUndefined(); // A is not shown for B
+    await h.respond({ SourceFilter: "SOURCE B" }, rawMediaFiltered("B"));
+
+    expect(h.filtered.getCurrentResult().data).toEqual(filteredData("B"));
+    expect(entriesOf(h.queryClient, "mediaFiltered")).toHaveLength(1);
+    h.cleanup();
+  });
+
+  it("filtered data is removed when main data for a new date range arrives", async () => {
+    const h = mediaHarness();
+    h.setDates("2026-08-01", "2026-10-01");
+    await h.respond({ IncludeMain: true }, rawMediaMain("M1"));
+    h.setCrossFilter({ kind: "source", value: "SOURCE A" });
+    await h.respond({ SourceFilter: "SOURCE A" }, rawMediaFiltered("A"));
+
+    h.setDates("2026-09-01", "2026-10-01"); // clears the cross-filter
+    expect(h.main.getCurrentResult().data).toBeUndefined();
+    expect(h.filtered.getCurrentResult().data).toBeUndefined();
+    // The old filtered result is only removed once new main data arrives.
+    expect(entriesOf(h.queryClient, "mediaFiltered")).toHaveLength(1);
+
+    await h.respond({ StartDate: "2026-09-01", IncludeMain: true }, rawMediaMain("M2"));
+    expect(h.main.getCurrentResult().data).toEqual(mainData("M2"));
+    expect(entriesOf(h.queryClient, "mediaFiltered")).toHaveLength(0);
+    expect(entriesOf(h.queryClient, "mediaMain")).toHaveLength(1);
+    h.cleanup();
+  });
+
+  it("an in-flight filtered request for the old date range is dropped", async () => {
+    const h = mediaHarness();
+    h.setDates("2026-08-01", "2026-10-01");
+    await h.respond({ IncludeMain: true }, rawMediaMain("M1"));
+    h.setCrossFilter({ kind: "source", value: "SOURCE A" });
+    const lateFiltered = h.find({ SourceFilter: "SOURCE A" });
+
+    h.setDates("2026-09-01", "2026-10-01");
+    await h.respond({ StartDate: "2026-09-01", IncludeMain: true }, rawMediaMain("M2"));
+    lateFiltered.resolve(rawMediaFiltered("A"));
+    await settle();
+
+    expect(entriesOf(h.queryClient, "mediaFiltered")).toHaveLength(0);
+    expect(h.filtered.getCurrentResult().data).toBeUndefined();
+    expect(h.main.getCurrentResult().data).toEqual(mainData("M2"));
+    h.cleanup();
+  });
+
+  it("a refetch of the same main data keeps the filtered result", async () => {
+    const h = mediaHarness();
+    h.setDates("2026-08-01", "2026-10-01");
+    await h.respond({ IncludeMain: true }, rawMediaMain("M1"));
+    h.setCrossFilter({ kind: "source", value: "SOURCE A" });
+    await h.respond({ SourceFilter: "SOURCE A" }, rawMediaFiltered("A"));
+
+    const refetch = h.main.refetch();
+    h.requests[2].resolve(rawMediaMain("M1"));
+    await refetch;
+    await settle();
+
+    expect(h.filtered.getCurrentResult().data).toEqual(filteredData("A"));
+    expect(entriesOf(h.queryClient, "mediaFiltered")).toHaveLength(1);
+    h.cleanup();
+  });
+});
