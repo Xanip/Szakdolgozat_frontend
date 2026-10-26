@@ -44,13 +44,16 @@ export function FromTodayDatePicker({onChange,}: FromTodayDatePickerProps) {
     };
 
     return (
-        <div className="flex items-center gap-2">
-        <span className="text-sm text-muted-foreground">Previous</span>
+        // Segmented frame: "Previous" label | amount | unit, sharing one border
+        <div className="period-picker">
+        <span className="period-picker-label">Previous</span>
 
         <Input
             type="number"
             min={1}
-            className="w-20"
+            placeholder="0"
+            aria-label="Amount"
+            className="period-picker-input w-16"
             value={amount ?? ""}
             onChange={(e) => {
             const n = e.target.value === "" ? null : Number(e.target.value);
@@ -67,7 +70,7 @@ export function FromTodayDatePicker({onChange,}: FromTodayDatePickerProps) {
             emit(amount, nextUnit);
             }}
         >
-            <SelectTrigger className="w-32">
+            <SelectTrigger className="period-picker-select w-28" aria-label="Unit">
             <SelectValue placeholder="egység" />
             </SelectTrigger>
             <SelectContent>

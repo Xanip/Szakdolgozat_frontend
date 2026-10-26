@@ -46,9 +46,9 @@ export function AppSidebar({
       >
         <div className="sidebar-brand">
           <div className="brand-mark" aria-hidden="true">
-            FX
+            BI
           </div>
-          {!collapsed && <span>Currency Lens</span>}
+          {!collapsed && <span>BI PAGE</span>}
           <Button
             type="button"
             className="mobile-close"

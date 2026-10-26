@@ -24,16 +24,22 @@ export function FxPerformanceContent({ data }: FxPerformanceContentProps) {
     return (
     <section aria-labelledby="placeholder-title">
       
-      <div>
-        <KpiCard title="Rate of today" value={fixedTodayRate}/>
-        <KpiCard title="The rate of yesterday" value={fixedPrevRate}/>
-        <KpiCard title="Change since yesterday" value={percentChangeYesterday}/>
+      <div className="kpi-grid">
         <KpiCard title="First rate in chosen period" value={fixedFirstRateInPeriod}/>
         <KpiCard title="Change since the start of Period" value={percentChangePeriod}/>
+        <KpiCard title="Rate of today" value={fixedTodayRate} highlight/>
+        <KpiCard title="The rate of yesterday" value={fixedPrevRate}/>
+        <KpiCard title="Change since yesterday" value={percentChangeYesterday}/>
       </div>
       
-        <SmoothLineChart dates={charts.lineChart_X} values={charts.lineChart_Y_data} onClick={(date)=> setFilters({startDate:date, toDate: date})} />
-        <AccumulatedWaterfallChart data={waterfallData} onClick={(startDate, toDate) => setFilters({startDate:startDate, toDate:toDate})}/>
+      <div className="chart-grid">
+        <div className="chart-panel">
+          <SmoothLineChart dates={charts.lineChart_X} values={charts.lineChart_Y_data} onClick={(date)=> setFilters({startDate:date, toDate: date})} />
+        </div>
+        <div className="chart-panel">
+          <AccumulatedWaterfallChart data={waterfallData} onClick={(startDate, toDate) => setFilters({startDate:startDate, toDate:toDate})}/>
+        </div>
+      </div>
     </section>
   );
 }

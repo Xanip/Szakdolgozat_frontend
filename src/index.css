@@ -12,7 +12,8 @@
      8. Sidebar                brand, navigation links, collapse control
      9. Header                 page title, kicker, icon buttons
     10. Content & placeholder  content container + page placeholder card
-    11. Responsive             mobile drawer behaviour (<= 720px)
+    11. Page widgets           filter box and KPI card row
+    12. Responsive             mobile drawer behaviour (<= 720px)
    ========================================================================== */
 
 /* 1. External imports ------------------------------------------------------ */
@@ -101,6 +102,15 @@
   --chart-3: #C4965A;
   --chart-4: #8C6F91;
   --chart-5: #526B7A;
+  /* ECharts palette (read by useChartTheme; keep as plain hex, no var()/color-mix) */
+  --chart-line: #A66A4C;
+  --chart-increase: #6E9B73;
+  --chart-decrease: #C2615A;
+  --chart-text: #5E564C;
+  --chart-axis: #C9BCA9;
+  --chart-grid: #E6DDCF;
+  --chart-tooltip-bg: #FFFCF6;
+  --chart-tooltip-border: #E0D7C9;
   --radius: 0.5rem;
   --sidebar: #EEE7DB;
   --sidebar-foreground: #302B25;
@@ -137,6 +147,14 @@
   --chart-3: #D1AA70;
   --chart-4: #B19AB4;
   --chart-5: #8DA7B7;
+  --chart-line: #D6A17D;
+  --chart-increase: #8FBF93;
+  --chart-decrease: #E07A73;
+  --chart-text: #C2B8A9;
+  --chart-axis: #5E554A;
+  --chart-grid: #3E3933;
+  --chart-tooltip-bg: #312E28;
+  --chart-tooltip-border: #494239;
   --sidebar: #312E28;
   --sidebar-foreground: #F5F1E8;
   --sidebar-primary: #D6A17D;
@@ -221,7 +239,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--ring); outline-
 /* 10. Content & placeholder ------------------------------------------------
    Main content container plus the temporary per-route placeholder card used
    until each analytics page is implemented. */
-.content-area { padding: clamp(24px, 5vw, 72px); }
+.content-area { padding: 20px clamp(24px, 5vw, 72px) clamp(24px, 5vw, 72px); }
 .placeholder { max-width: 760px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); padding: clamp(28px, 6vw, 64px); }
 .placeholder-icon { display: grid; height: 48px; width: 48px; place-items: center; border-radius: 10px; background: var(--muted); color: var(--primary); }
 .placeholder-icon svg { width: 24px; }
@@ -229,7 +247,70 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--ring); outline-
 .placeholder h2 { margin: 0; font-family: var(--font-heading); font-size: clamp(1.6rem, 3vw, 2.35rem); }
 .placeholder-copy { max-width: 480px; margin: 14px 0 0; color: var(--muted-foreground); line-height: 1.7; }
 
-/* 11. Responsive -----------------------------------------------------------
+/* 11. Page widgets ---------------------------------------------------------
+   Filter frame at the top of analytics pages and the KPI card row.
+   `.filter-box` wraps filters in a card; `.filter-box-row` lays them out
+   side by side. `.kpi-grid` is a padded panel holding five equal KPI cards
+   in one row; `.kpi-card-highlight` emphasises the headline KPI. */
+.filter-box { margin: 0 0 20px; }
+
+/* Period picker: label, number input and unit select inside one shared frame.
+   Inner controls drop their own borders; the frame shows the focus ring. */
+.period-picker { display: flex; height: 32px; align-items: stretch; overflow: hidden; border: 1px solid var(--input); border-radius: 8px; background: var(--card); transition: border-color 150ms ease, box-shadow 150ms ease; }
+.period-picker:focus-within { border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 35%, transparent); }
+.period-picker-label { display: flex; align-items: center; border-right: 1px solid var(--input); background: var(--secondary); padding: 0 10px; color: var(--muted-foreground); font-size: 0.8rem; font-weight: 500; }
+.period-picker .period-picker-input, .period-picker .period-picker-select { height: 100%; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.period-picker .period-picker-input { border-right: 1px solid var(--input); text-align: center; }
+.filter-box-row { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: center; gap: 16px 28px; }
+
+/* Searchable currency picker trigger (ui/combobox). Mirrors the shadcn select trigger;
+   the popup, search field and items are styled by ui/combobox itself. */
+.currency-trigger { display: flex; height: 32px; align-items: center; justify-content: space-between; gap: 6px; border: 1px solid var(--input); border-radius: 8px; background: transparent; padding: 0 8px 0 10px; color: var(--foreground); font: inherit; font-size: 0.875rem; text-align: left; white-space: nowrap; cursor: pointer; transition: border-color 150ms ease; }
+.currency-trigger:hover { border-color: color-mix(in srgb, var(--primary) 45%, var(--input)); }
+.currency-trigger:focus-visible { border-color: var(--ring); outline: 3px solid color-mix(in srgb, var(--ring) 35%, transparent); outline-offset: 0; }
+.currency-trigger:disabled { cursor: not-allowed; opacity: 0.5; }
+.currency-trigger [data-placeholder], .currency-trigger:has([data-placeholder]) { color: var(--muted-foreground); }
+.dark .currency-trigger { background: color-mix(in srgb, var(--input) 30%, transparent); }
+
+.kpi-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; margin-bottom: 24px; border: 1px solid var(--border); border-radius: 12px; background: var(--secondary); padding: 24px; }
+.kpi-card { width: 100%; min-height: 120px; transition: transform 150ms ease, box-shadow 150ms ease; }
+.kpi-card:hover { transform: translateY(-2px); --tw-ring-color: color-mix(in srgb, var(--primary) 45%, transparent); }
+/* Card draws its outline with a Tailwind ring (box-shadow), so we recolor the ring instead of overriding box-shadow. */
+.kpi-card-highlight, .kpi-card-highlight:hover { --tw-ring-color: var(--primary); background: color-mix(in srgb, var(--primary) 7%, var(--card)); }
+
+/* Chart row: each chart sits in a card panel; ECharts auto-resizes to the panel. */
+.chart-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+.chart-panel { height: clamp(280px, 42vh, 400px); min-width: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--card); padding: 12px 8px 4px; }
+
+/* 11b. Page widget responsiveness -------------------------------------------
+   Container queries on `.content-area` (not viewport media queries), so the
+   layout also reacts to the sidebar collapsing/expanding, not just the window.
+   Breakpoints refer to the content width:
+     >= 1200px  charts side by side
+     <  1000px  KPI cards: today's rate full width on top, the rest in a 2x2 grid
+     <  600px   single column: filters stretch full width, KPI cards stack */
+.content-area { container-type: inline-size; container-name: content; }
+
+@container content (min-width: 1200px) {
+  .chart-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@container content (max-width: 999px) {
+  .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpi-card-highlight { order: -1; grid-column: 1 / -1; }
+}
+
+@container content (max-width: 599px) {
+  .kpi-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 14px; }
+  .kpi-card { min-height: 0; }
+  .filter-box-row { flex-direction: column; align-items: stretch; gap: 14px; }
+  .filter-field { width: 100%; }
+  .filter-field .currency-trigger, .filter-field .period-picker { width: 100%; }
+  .period-picker .period-picker-select { flex: 1; width: auto; }
+  .chart-panel { height: 280px; padding: 8px 4px 0; }
+}
+
+/* 12. Responsive -----------------------------------------------------------
    On narrow screens (<= 720px) the sidebar becomes an off-canvas drawer with
    a click-away backdrop, and the main content reclaims the full width.
    Drawer-only controls (.mobile-menu, .mobile-close, .sidebar-backdrop) are
@@ -245,5 +326,5 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--ring); outline-
   .app-header { min-height: 132px; padding: 24px 20px; }
   .header-heading { gap: 10px; }
   .mobile-menu { display: grid; flex: 0 0 auto; }
-  .content-area { padding: 20px; }
+  .content-area { padding: 16px; }
 }

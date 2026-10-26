@@ -27,6 +27,8 @@ export function AppHeader({
   onToggleTheme,
   onOpenMobileNav,
 }: AppHeaderProps) {
+  const Icon = route.icon;
+
   return (
     <header className="app-header">
       <div className="header-heading">
@@ -43,8 +45,10 @@ export function AppHeader({
           <Menu aria-hidden="true" />
         </Button>
         <div>
-          <p className="header-kicker">Currency intelligence</p>
-          <h1>{route.title}</h1>
+          <div className="flex items-center gap-3">
+            <div className="placeholder-icon"><Icon aria-hidden="true" /></div>
+            <h1>{route.title}</h1>
+          </div>
           <p>{route.description}</p>
         </div>
       </div>

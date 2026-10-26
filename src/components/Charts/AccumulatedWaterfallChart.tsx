@@ -1,5 +1,6 @@
 import ReactECharts from "echarts-for-react";
 import type { EChartsOption } from "echarts";
+import { useChartTheme } from "@/hooks/useChartTheme";
 
 function getMonthDateRange(yearMonth: string) {
   const [year, month] = yearMonth.split("-").map(Number);
@@ -28,7 +29,7 @@ interface WaterfallItem {
 interface AccumulatedWaterfallProps {
   data: WaterfallItem[];
   title?: string;
-  onClick: (startDate: string, endDate:string) => void;
+  onClick?: (startDate: string, endDate:string) => void;
 }
 
 export function AccumulatedWaterfallChart({
@@ -36,6 +37,7 @@ export function AccumulatedWaterfallChart({
   title = "Accumulated change",
   onClick
 }: AccumulatedWaterfallProps) {
+  const colors = useChartTheme();
   let runningTotal = 0;
 
   const helper: number[] = [];
@@ -64,10 +66,15 @@ export function AccumulatedWaterfallChart({
   });
 
   const option: EChartsOption = {
-    title: { text: title },
+    backgroundColor: "transparent",
+    textStyle: { color: colors.text },
+    title: { text: title, textStyle: { color: colors.text } },
     tooltip: {
       trigger: "axis",
       axisPointer: { type: "shadow" },
+      backgroundColor: colors.tooltipBg,
+      borderColor: colors.tooltipBorder,
+      textStyle: { color: colors.text },
     },
     grid: {
       left: 24,
@@ -80,10 +87,14 @@ export function AccumulatedWaterfallChart({
       type: "category",
       data: data.map((item) => item.name),
       axisTick: { alignWithLabel: true },
+      axisLine: { lineStyle: { color: colors.axis } },
+      axisLabel: { color: colors.text },
     },
     yAxis: {
       type: "value",
       scale: true,
+      axisLabel: { color: colors.text },
+      splitLine: { lineStyle: { color: colors.grid } },
     },
     series: [
       {
@@ -108,6 +119,9 @@ export function AccumulatedWaterfallChart({
         type: "bar",
         stack: "total",
         data: increases,
+        itemStyle: {
+          color: colors.increase,
+        },
       },
       {
         name: "Decrease",
@@ -115,29 +129,33 @@ export function AccumulatedWaterfallChart({
         stack: "total",
         data: decreases,
         itemStyle: {
-          color: "#dc6464",
+          color: colors.decrease,
         },
       },
     ],
   };
 
-  const onEvents = {
-    click: (params: { componentType: string; dataIndex: number }) => {
-      if (params.componentType !== "series") return;
 
-      const chosenWaterfallItem = data[params.dataIndex];
-      const dates = getMonthDateRange(chosenWaterfallItem.name)
-      if (dates !== undefined) {
-        onClick(dates.startDate, dates.toDate);
-      }
-    },
-  };
+    const onEvents = {
 
+        click: (params: { componentType: string; dataIndex: number }) => {
+          if (params.componentType !== "series") return;
+
+          const chosenWaterfallItem = data[params.dataIndex];
+          const dates = getMonthDateRange(chosenWaterfallItem.name)
+          if (dates !== undefined) {
+            onClick?.(dates.startDate, dates.toDate);
+          }
+          
+        },
+
+    };
+ 
   return (
     <ReactECharts
       option={option}
       onEvents = {onEvents}
-      style={{ height: 360, width: "100%" }}
+      style={{ height: "100%", width: "100%" }}
       notMerge
       lazyUpdate
     />
