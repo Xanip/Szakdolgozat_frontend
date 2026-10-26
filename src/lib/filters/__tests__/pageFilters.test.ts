@@ -80,7 +80,12 @@ describe("debounced filter state", () => {
     });
     expect(registry.getActive("fxPerformance")).toEqual(
       queryKeys.fxPerformance(
-        buildFxPerformanceParams({ baseCurrency: "USD", targetCurrency: "CHF", startDate: null }),
+        buildFxPerformanceParams({
+          baseCurrency: "USD",
+          targetCurrency: "CHF",
+          startDate: null,
+          toDate: null,
+        }),
       ),
     );
 

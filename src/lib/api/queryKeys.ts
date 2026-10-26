@@ -16,8 +16,7 @@ export type FxPerformanceParams = {
   BaseCurrency: string;
   TargetCurrency: string;
   StartDate: string | null;
-  /** Always `null` for the FX Performance page (see Spec). */
-  ToDate: null;
+  ToDate: string | null;
 };
 
 export type DailyHeatmapParams = {
@@ -56,7 +55,7 @@ export function buildFxPerformanceParams(
     BaseCurrency: filters.baseCurrency,
     TargetCurrency: filters.targetCurrency,
     StartDate: filters.startDate,
-    ToDate: null,
+    ToDate: filters.toDate,
   };
 }
 

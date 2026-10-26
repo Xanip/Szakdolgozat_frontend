@@ -27,6 +27,7 @@ export const INITIAL_FX_PERFORMANCE_FILTERS: FxPerformanceFilters = {
   baseCurrency: null,
   targetCurrency: null,
   startDate: null,
+  toDate: null,
 };
 
 export const INITIAL_DAILY_HEATMAP_FILTERS: DailyHeatmapFilters = {

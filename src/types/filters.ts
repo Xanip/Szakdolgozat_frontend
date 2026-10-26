@@ -9,8 +9,9 @@
 export type FxPerformanceFilters = {
   baseCurrency: string | null;
   targetCurrency: string | null;
-  /** ISO date (`YYYY-MM-DD`). `ToDate` is always `null` for this page. */
+  /** ISO date (`YYYY-MM-DD`). */
   startDate: string | null;
+  toDate: string | null;
 };
 
 export type DailyHeatmapFilters = {

@@ -26,7 +26,7 @@ export function FxPerformancePage({ route }: FxPerformancePageProps) {
     <div>
         <CurrencySelect value={filters.baseCurrency} onChange={(b)=> setFilters({baseCurrency:b})}/>
         <CurrencySelect value={filters.targetCurrency} onChange={(t)=> setFilters({targetCurrency:t})}/>
-        <FromTodayDatePicker onChange={(d)=>setFilters({startDate:d})} />
+        <FromTodayDatePicker onChange={(d)=>setFilters({startDate:d, toDate:null})} />
     </div>
     
         {!hasSelection ? (

@@ -5,9 +5,10 @@ interface SmoothLineChartProps {
   dates: string[] | null;
   values: number[] | null;
   title?: string;
+  onClick: (date: string) => void;
 }
 
-export function SmoothLineChart({dates,values,title = "Exchange rate",}: SmoothLineChartProps) {
+export function SmoothLineChart({dates,values,title = "Exchange rate",onClick}: SmoothLineChartProps) {
 const safeDates = dates ?? [];
 const safeValues = values ?? [];
 
@@ -44,9 +45,22 @@ const safeValues = values ?? [];
     ],
   };
 
+
+  const onEvents = {
+    click: (params: { componentType: string; dataIndex: number }) => {
+      if (params.componentType !== "series") return;
+
+      const date = safeDates[params.dataIndex];
+      if (date !== undefined) {
+        onClick(date);
+      }
+    },
+  };
+
   return (
     <ReactECharts
       option={option}
+      onEvents = {onEvents}
       style={{ height: 360, width: "100%" }}
       notMerge
       lazyUpdate

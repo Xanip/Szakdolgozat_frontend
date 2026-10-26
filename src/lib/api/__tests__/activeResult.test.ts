@@ -48,7 +48,12 @@ function cached(client: QueryClient, key: QueryKey) {
 
 const fxKey = (baseCurrency: string, targetCurrency: string) =>
   queryKeys.fxPerformance(
-    buildFxPerformanceParams({ baseCurrency, targetCurrency, startDate: null }),
+    buildFxPerformanceParams({
+      baseCurrency,
+      targetCurrency,
+      startDate: null,
+      toDate: null,
+    }),
   );
 
 function fxHarness() {
@@ -170,8 +175,11 @@ describe("active result per role", () => {
     );
 
     h.select({ baseCurrency: "EUR" });
-    // Until EUR/HUF succeeds, USD/HUF stays cached but is not shown for EUR/HUF.
-    expect(h.observer.getCurrentResult().data).toBeUndefined();
+    // Until EUR/HUF succeeds, `keepPreviousData` shows the previous USD/HUF
+    // result as a placeholder (no content flicker) while USD/HUF stays cached.
+    const whileLoadingEur = h.observer.getCurrentResult();
+    expect(whileLoadingEur.data).toEqual(processFxPerformance(rawFx(1)));
+    expect(whileLoadingEur.isPlaceholderData).toBe(true);
     expect(cached(h.queryClient, fxKey("USD", "HUF"))).toBeDefined();
 
     h.find({ BaseCurrency: "EUR" }).resolve(rawFx(3));
@@ -179,6 +187,8 @@ describe("active result per role", () => {
     expect(h.queryClient.getQueryData(fxKey("EUR", "HUF"))).toEqual(
       processFxPerformance(rawFx(3)),
     );
+    // The real EUR/HUF result has replaced the placeholder.
+    expect(h.observer.getCurrentResult().isPlaceholderData).toBe(false);
     expect(cached(h.queryClient, fxKey("USD", "HUF"))).toBeUndefined();
     expect(entriesOf(h.queryClient, "fxPerformance")).toHaveLength(1);
     h.unsubscribe();
@@ -195,11 +205,16 @@ describe("active result per role", () => {
 
     h.select({ targetCurrency: "HUF" });
     expect(h.requests).toHaveLength(3);
-    expect(h.observer.getCurrentResult().data).toBeUndefined();
+    // HUF was removed from the cache, so it is refetched. Meanwhile
+    // `keepPreviousData` shows the latest EUR result as a placeholder.
+    const whileRefetchingHuf = h.observer.getCurrentResult();
+    expect(whileRefetchingHuf.data).toEqual(processFxPerformance(rawFx(2)));
+    expect(whileRefetchingHuf.isPlaceholderData).toBe(true);
 
     h.requests[2].resolve(rawFx(5));
     await settle();
     expect(h.observer.getCurrentResult().data).toEqual(processFxPerformance(rawFx(5)));
+    expect(h.observer.getCurrentResult().isPlaceholderData).toBe(false);
     expect(entriesOf(h.queryClient, "fxPerformance")).toHaveLength(1);
     h.unsubscribe();
   });

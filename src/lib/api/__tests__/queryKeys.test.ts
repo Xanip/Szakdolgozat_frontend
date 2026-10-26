@@ -12,11 +12,12 @@ import {
 } from "@/lib/api/queryKeys";
 
 describe("query keys", () => {
-  it("FX Performance key holds the requested params with ToDate always null", () => {
+  it("FX Performance key holds the requested params, including ToDate", () => {
     const params = buildFxPerformanceParams({
       baseCurrency: "USD",
       targetCurrency: "HUF",
       startDate: "2026-08-01",
+      toDate: "2026-08-31",
     });
     expect(queryKeys.fxPerformance(params)).toEqual([
       "FX_performance",
@@ -24,23 +25,48 @@ describe("query keys", () => {
         BaseCurrency: "USD",
         TargetCurrency: "HUF",
         StartDate: "2026-08-01",
-        ToDate: null,
+        ToDate: "2026-08-31",
       },
     ]);
   });
 
+  it("FX Performance ToDate is null when no end date is selected", () => {
+    const params = buildFxPerformanceParams({
+      baseCurrency: "USD",
+      targetCurrency: "HUF",
+      startDate: "2026-08-01",
+      toDate: null,
+    });
+    expect(params).toMatchObject({ StartDate: "2026-08-01", ToDate: null });
+  });
+
   it("FX Performance params are null until both currencies are chosen", () => {
     expect(
-      buildFxPerformanceParams({ baseCurrency: "USD", targetCurrency: null, startDate: null }),
+      buildFxPerformanceParams({
+        baseCurrency: "USD",
+        targetCurrency: null,
+        startDate: null,
+        toDate: null,
+      }),
     ).toBeNull();
   });
 
   it("different currency pairs produce different keys", () => {
     const usdHuf = queryKeys.fxPerformance(
-      buildFxPerformanceParams({ baseCurrency: "USD", targetCurrency: "HUF", startDate: null }),
+      buildFxPerformanceParams({
+        baseCurrency: "USD",
+        targetCurrency: "HUF",
+        startDate: null,
+        toDate: null,
+      }),
     );
     const eurHuf = queryKeys.fxPerformance(
-      buildFxPerformanceParams({ baseCurrency: "EUR", targetCurrency: "HUF", startDate: null }),
+      buildFxPerformanceParams({
+        baseCurrency: "EUR",
+        targetCurrency: "HUF",
+        startDate: null,
+        toDate: null,
+      }),
     );
     expect(hashKey(usdHuf)).not.toBe(hashKey(eurHuf));
   });
