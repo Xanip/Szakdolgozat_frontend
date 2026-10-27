@@ -111,6 +111,13 @@
   --chart-grid: #E6DDCF;
   --chart-tooltip-bg: #FFFCF6;
   --chart-tooltip-border: #E0D7C9;
+  /* Heatmap scale: neutral (0%) mixes toward negative/positive by magnitude */
+  --heatmap-negative: #B8564F;
+  --heatmap-neutral: #F4EEE4;
+  --heatmap-positive: #5F9468;
+  --heatmap-text: #302B25;
+  --heatmap-text-strong: #FFFCF6;
+  --heatmap-empty: #EBE4D8;
   --radius: 0.5rem;
   --sidebar: #EEE7DB;
   --sidebar-foreground: #302B25;
@@ -155,6 +162,12 @@
   --chart-grid: #3E3933;
   --chart-tooltip-bg: #312E28;
   --chart-tooltip-border: #494239;
+  --heatmap-negative: #D9736B;
+  --heatmap-neutral: #38332D;
+  --heatmap-positive: #84B98A;
+  --heatmap-text: #F5F1E8;
+  --heatmap-text-strong: #25231F;
+  --heatmap-empty: #2C2924;
   --sidebar: #312E28;
   --sidebar-foreground: #F5F1E8;
   --sidebar-primary: #D6A17D;
@@ -281,6 +294,39 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--ring); outline-
 /* Chart row: each chart sits in a card panel; ECharts auto-resizes to the panel. */
 .chart-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
 .chart-panel { height: clamp(280px, 42vh, 400px); min-width: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--card); padding: 12px 8px 4px; }
+
+/* Daily heatmap (virtualized grid, HeatMap.tsx).
+   One scroll container; the column header sticks to the top, the row header
+   to the left, and the corner to both. Cells and labels are absolutely
+   positioned by the virtualizer, so only visible ones are in the DOM. */
+.heatmap { margin: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--card); padding: 16px; }
+.heatmap-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; margin-bottom: 14px; }
+.heatmap-title { margin: 0; font-family: var(--font-heading); font-size: 1rem; font-weight: 650; }
+.heatmap-subtitle { margin: 4px 0 0; color: var(--muted-foreground); font-size: 0.8rem; }
+.heatmap-legend { display: flex; align-items: center; gap: 8px; color: var(--muted-foreground); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.heatmap-legend-bar { height: 10px; width: 160px; border-radius: 999px; background: linear-gradient(to right, var(--heatmap-negative), var(--heatmap-neutral), var(--heatmap-positive)); box-shadow: inset 0 0 0 1px var(--border); }
+.heatmap-scroll { position: relative; max-height: min(70vh, 640px); overflow: auto; overscroll-behavior: contain; border: 1px solid var(--border); border-radius: 8px; background: var(--card); }
+.heatmap-scroll:focus-visible { outline: 3px solid color-mix(in srgb, var(--ring) 45%, transparent); outline-offset: 2px; }
+
+.heatmap-col-header { position: sticky; top: 0; z-index: 3; display: flex; border-bottom: 1px solid var(--border); background: var(--secondary); }
+.heatmap-corner { position: sticky; left: 0; z-index: 4; display: flex; flex-direction: column; justify-content: center; border-right: 1px solid var(--border); background: var(--secondary); padding: 0 8px; color: var(--muted-foreground); font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em; line-height: 1.25; text-transform: uppercase; }
+.heatmap-corner span:last-child { align-self: flex-end; }
+.heatmap-body { position: relative; }
+.heatmap-row-header { position: sticky; left: 0; z-index: 2; height: 100%; border-right: 1px solid var(--border); background: var(--secondary); }
+
+.heatmap-label { position: absolute; display: grid; place-items: center; color: var(--foreground); font-size: 0.72rem; font-weight: 650; letter-spacing: 0.02em; }
+.heatmap-col-label { top: 0; height: 100%; }
+.heatmap-row-label { left: 0; width: 100%; }
+
+/* Inset shadow in the card color draws a 1px gap between cells (no extra DOM). */
+.heatmap-cell { position: absolute; display: grid; place-items: center; box-shadow: inset 0 0 0 1px var(--card); color: var(--heatmap-text); font-size: 0.66rem; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; cursor: default; user-select: none; }
+.heatmap-cell:hover { z-index: 1; box-shadow: inset 0 0 0 2px var(--foreground); }
+.heatmap-cell-empty { background: var(--heatmap-empty); color: var(--muted-foreground); }
+.heatmap-empty { color: var(--muted-foreground); }
+/* ECharts version (ApacheHeatMap.tsx): fixed-size canvas, the window scrolls inside it. */
+.heatmap-echarts { overflow: hidden; border: 1px solid var(--border); border-radius: 8px; background: var(--card); }
+.heatmap-echarts:focus-visible { outline: 3px solid color-mix(in srgb, var(--ring) 45%, transparent); outline-offset: 2px; }
+.heatmap-compare { display: grid; gap: 20px; }
 
 /* 11b. Page widget responsiveness -------------------------------------------
    Container queries on `.content-area` (not viewport media queries), so the

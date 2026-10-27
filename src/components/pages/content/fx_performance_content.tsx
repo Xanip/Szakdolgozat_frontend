@@ -15,11 +15,11 @@ export function FxPerformanceContent({ data }: FxPerformanceContentProps) {
     const waterfallData = charts.waterfallVarianceChart_X && charts.waterfallVarianceChart_Y_data
         ? charts.waterfallVarianceChart_X.map((name, i) => ({name,value: charts.waterfallVarianceChart_Y_data![i],})): [];
     
-    const percentChangeYesterday = kpi.changeSinceYesterday ? `${(kpi.changeSinceYesterday*100).toFixed(2)}%` : null
-    const percentChangePeriod =kpi.changeSincePeriod ? `${(kpi.changeSincePeriod*100).toFixed(2)}%` : null
-    const fixedTodayRate = kpi.todaysRate? kpi.todaysRate.toFixed(2) : null;
-    const fixedPrevRate = kpi.previousDayRate? kpi.previousDayRate.toFixed(2) : null;
-    const fixedFirstRateInPeriod = kpi.firstRateInPeriod? kpi.firstRateInPeriod.toFixed(2) : null;
+    const percentChangeYesterday = kpi.changeSinceYesterday ? `${(kpi.changeSinceYesterday*100).toFixed(3)}%` : null
+    const percentChangePeriod =kpi.changeSincePeriod ? `${(kpi.changeSincePeriod*100).toFixed(3)}%` : null
+    const fixedTodayRate = kpi.todaysRate? kpi.todaysRate.toFixed(4) : null;
+    const fixedPrevRate = kpi.previousDayRate? kpi.previousDayRate.toFixed(4) : null;
+    const fixedFirstRateInPeriod = kpi.firstRateInPeriod? kpi.firstRateInPeriod.toFixed(4) : null;
 
     return (
     <section aria-labelledby="placeholder-title">
