@@ -1,17 +1,27 @@
 import type { RouteConfig } from "@/types/navigation";
+import { FilterBox, FilterField } from "../ui/built_ui/FilterBox";
+import { MediaAnalyticsContent } from "./content/media_analytics_content";
 
 type MediaAnalyticsPageProps = {
   route: RouteConfig;
 };
 
 export function MediaAnalyticsPage({ route }: MediaAnalyticsPageProps) {
-  const Icon = route.icon;
+  // TODO: wire up useMediaAnalyticsFilters() and useMediaAnalytics() (params, query) following the fx_performance / daily_heatmap pattern.
+
   return (
-    <section className="placeholder" aria-labelledby="placeholder-title">
-      <div className="placeholder-icon">
-        <Icon aria-hidden="true" />
-      </div>
-      <h2 id="placeholder-title">{route.title}</h2>
+    <section aria-label={route.title}>
+
+    <FilterBox>
+        <FilterField label="Filters">
+            {/* TODO: filter controls (e.g. category, period) */}
+            <span className="text-xs text-muted-foreground">Coming soon</span>
+        </FilterField>
+    </FilterBox>
+
+        {/* TODO: loading / error / no-selection states once the query is wired up */}
+        <MediaAnalyticsContent />
+
     </section>
   );
 }
