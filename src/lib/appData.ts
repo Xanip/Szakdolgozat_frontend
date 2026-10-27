@@ -6,7 +6,9 @@ import {
   type ActiveResultRegistry,
 } from "@/lib/api/activeResult";
 import { createAppQueryClient } from "@/lib/api/queryClient";
+import { getMediaDateRange } from "@/lib/api/queryKeys";
 import {
+  clearStaleMediaCrossFilter,
   createPageFilterStores,
   type PageFilterOptions,
   type PageFilterStores,
@@ -25,11 +27,17 @@ export type AppData = {
 
 export function createAppData(options?: PageFilterOptions): AppData {
   const registry = createActiveResultRegistry();
-  return {
-    registry,
-    queryClient: createAppQueryClient(registry),
-    filters: createPageFilterStores(registry, options),
-  };
+  const filters = createPageFilterStores(registry, options);
+  const queryClient = createAppQueryClient(registry, {
+    // New Media data for another date range invalidates the cross-filter.
+    // Runs outside React, so it also works while another page is open.
+    onActiveSuccess: (role, queryKey) => {
+      if (role !== "mediaAnalytics") return;
+      const range = getMediaDateRange(queryKey);
+      if (range) clearStaleMediaCrossFilter(filters.mediaCrossFilter, range);
+    },
+  });
+  return { registry, queryClient, filters };
 }
 
 export const AppDataContext = createContext<AppData | null>(null);

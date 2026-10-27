@@ -13,8 +13,7 @@ import { createEndpointQueryFn, dimensionsQueryOptions, fxPerformanceQueryOption
 import {
   buildDailyHeatmapParams,
   buildFxPerformanceParams,
-  buildMediaFilteredParams,
-  buildMediaMainParams,
+  buildMediaAnalyticsParams,
   getResultRole,
   queryKeys,
   type ResultRole,
@@ -22,16 +21,20 @@ import {
 import { ResponseValidationError } from "@/lib/api/validators/guards";
 import { processFxPerformance } from "@/lib/api/processors/fxPerformance";
 import { processMediaAnalytics } from "@/lib/api/processors/mediaAnalytics";
-import { withMediaCrossFilter, withMediaDateRange } from "@/lib/filters/pageFilters";
-import type { FxPerformanceFilters, MediaCrossFilter } from "@/types/filters";
+import {
+  effectiveMediaCrossFilter,
+  toggleMediaCrossFilter,
+  withMediaDateRange,
+} from "@/lib/filters/pageFilters";
+import { buildMediaChartData } from "@/lib/media/mediaCharts";
+import type { FxPerformanceFilters, MediaCrossSelection } from "@/types/filters";
 
 import {
   createControlledHttp,
   rawDimensions,
   rawFx,
   rawHeatmap,
-  rawMediaFiltered,
-  rawMediaMain,
+  rawMedia,
   settle,
 } from "./fixtures";
 
@@ -320,167 +323,212 @@ describe("dimension data", () => {
   });
 });
 
-describe("Media Analytics main/filtered lifecycle", () => {
+describe("Media Analytics: one request per date range, client-side cross-filter", () => {
+  const AUG = { startDate: "2026-08-01", toDate: "2026-10-01" };
+  const SEP = { startDate: "2026-09-01", toDate: "2026-10-01" };
+
   function mediaHarness() {
     const transport = createControlledHttp();
-    const { queryClient, filters } = createAppData();
-    const store = filters.mediaAnalytics;
-    const mainOptions = () =>
-      mediaAnalyticsQueryOptions(buildMediaMainParams(store.getCommitted()), transport.http);
-    const filteredOptions = () =>
-      mediaAnalyticsQueryOptions(buildMediaFilteredParams(store.getCommitted()), transport.http);
+    const { queryClient, filters, registry } = createAppData();
+    const options = () =>
+      mediaAnalyticsQueryOptions(
+        buildMediaAnalyticsParams(filters.mediaAnalytics.getCommitted()),
+        transport.http,
+      );
 
-    const main = new QueryObserver(queryClient, mainOptions());
-    const filtered = new QueryObserver(queryClient, { ...filteredOptions(), enabled: false });
-    const unsubscribes = [main.subscribe(() => {}), filtered.subscribe(() => {})];
+    const observer = new QueryObserver(queryClient, options());
+    const unsubscribe = observer.subscribe(() => {});
+    const shown = () => observer.getCurrentResult().data;
 
-    /** Mirrors `useMediaAnalytics` re-rendering. */
-    const render = () => {
-      main.setOptions(mainOptions());
-      filtered.setOptions({
-        ...filteredOptions(),
-        enabled: main.getCurrentResult().data !== undefined,
-      });
+    /** User picks dates (no debounce wait); `useMediaAnalytics` re-renders. */
+    const editDates = (range: typeof AUG) => {
+      filters.mediaAnalytics.update((current) =>
+        withMediaDateRange(current, range.startDate, range.toDate),
+      );
     };
-    const setDates = (startDate: string, toDate: string) => {
-      store.update((current) => withMediaDateRange(current, startDate, toDate));
-      store.flush();
-      render();
+    const commit = () => {
+      filters.mediaAnalytics.flush();
+      observer.setOptions(options());
     };
-    const setCrossFilter = (crossFilter: MediaCrossFilter | null) => {
-      store.update((current) => withMediaCrossFilter(current, crossFilter));
-      store.flush();
-      render();
+    const setDates = (range: typeof AUG) => {
+      editDates(range);
+      commit();
     };
-    const respond = async (match: Record<string, unknown>, body: unknown) => {
-      transport.find(match).resolve(body);
-      await settle();
-      render();
+    /** Chart click, as `useMediaAnalyticsView().toggleCrossFilter` does. */
+    const click = (clicked: MediaCrossSelection) => {
+      const range = shown()?.range;
+      if (range) {
+        filters.mediaCrossFilter.update((current) =>
+          toggleMediaCrossFilter(current, { ...clicked, range }),
+        );
+      }
+      observer.setOptions(options()); // a re-render must not start a request
     };
-    const cleanup = () => unsubscribes.forEach((unsubscribe) => unsubscribe());
+    /** The cross-filter the view applies to the shown data. */
+    const effective = () =>
+      effectiveMediaCrossFilter(filters.mediaCrossFilter.get(), shown()?.range ?? null);
 
-    return { ...transport, queryClient, main, filtered, setDates, setCrossFilter, respond, cleanup };
+    return {
+      ...transport,
+      queryClient,
+      filters,
+      registry,
+      observer,
+      unsubscribe,
+      shown,
+      editDates,
+      commit,
+      setDates,
+      click,
+      effective,
+    };
   }
 
-  const mainData = (label: string) => processMediaAnalytics(rawMediaMain(label), "main");
-  const filteredData = (label: string) =>
-    processMediaAnalytics(rawMediaFiltered(label), "filtered");
+  const mediaKey = (range: typeof AUG) =>
+    queryKeys.mediaAnalytics({ StartDate: range.startDate, ToDate: range.toDate });
+  const mediaData = (label: string, range: typeof AUG) =>
+    processMediaAnalytics(rawMedia(label), range);
 
-  it("stores main and cross-filtered data under separate IncludeMain keys", async () => {
+  it("a date change keeps the previous result as placeholder, then replaces it", async () => {
     const h = mediaHarness();
-    h.setDates("2026-08-01", "2026-10-01");
+    h.setDates(AUG);
     expect(h.requests).toHaveLength(1);
-    expect(h.requests[0].params).toMatchObject({ IncludeMain: true, SourceFilter: null });
+    expect(h.requests[0].params).toEqual({ StartDate: "2026-08-01", ToDate: "2026-10-01" });
+    h.requests[0].resolve(rawMedia("A"));
+    await settle();
+    expect(h.shown()).toEqual(mediaData("A", AUG));
 
-    await h.respond({ IncludeMain: true }, rawMediaMain("M1"));
-    h.setCrossFilter({ kind: "source", value: "YAHOO ENTERTAINMENT" });
-    expect(h.requests[1].params).toMatchObject({
-      IncludeMain: false,
-      SourceFilter: "YAHOO ENTERTAINMENT",
-      CategoryFilter: null,
-    });
-    await h.respond({ SourceFilter: "YAHOO ENTERTAINMENT" }, rawMediaFiltered("F1"));
+    h.setDates(SEP);
+    const whileLoading = h.observer.getCurrentResult();
+    expect(whileLoading.data).toEqual(mediaData("A", AUG)); // old data, labelled as AUG
+    expect(whileLoading.isPlaceholderData).toBe(true);
 
-    expect(h.main.getCurrentResult().data).toEqual(mainData("M1"));
-    expect(h.filtered.getCurrentResult().data).toEqual(filteredData("F1"));
-    expect(entriesOf(h.queryClient, "mediaMain")).toHaveLength(1);
-    expect(entriesOf(h.queryClient, "mediaFiltered")).toHaveLength(1);
-    h.cleanup();
+    h.find({ StartDate: "2026-09-01" }).resolve(rawMedia("B"));
+    await settle();
+    expect(h.shown()).toEqual(mediaData("B", SEP));
+    expect(h.observer.getCurrentResult().isPlaceholderData).toBe(false);
+    expect(cached(h.queryClient, mediaKey(AUG))).toBeUndefined();
+    expect(entriesOf(h.queryClient, "mediaAnalytics")).toHaveLength(1);
+    h.unsubscribe();
   });
 
-  it("does not request filtered data before main data exists", () => {
+  it("a late response for an earlier date range is neither shown nor cached", async () => {
     const h = mediaHarness();
-    h.setDates("2026-08-01", "2026-10-01");
-    h.setCrossFilter({ kind: "category", value: "Inflation" });
-    expect(h.requests).toHaveLength(1); // only the main request
-    expect(h.filtered.getCurrentResult().fetchStatus).toBe("idle");
-    h.cleanup();
-  });
+    h.setDates(AUG);
+    const early = h.find({ StartDate: "2026-08-01" });
+    h.setDates(SEP);
 
-  it("a late earlier cross-filter cannot replace the latest one; main stays active", async () => {
-    const h = mediaHarness();
-    h.setDates("2026-08-01", "2026-10-01");
-    await h.respond({ IncludeMain: true }, rawMediaMain("M1"));
-
-    h.setCrossFilter({ kind: "source", value: "SOURCE A" }); // first column click
-    h.setCrossFilter({ kind: "category", value: "Inflation" }); // second click
-    await h.respond({ CategoryFilter: "Inflation" }, rawMediaFiltered("CATEGORY"));
-    await h.respond({ SourceFilter: "SOURCE A" }, rawMediaFiltered("SOURCE A")); // late
-
-    expect(h.filtered.getCurrentResult().data).toEqual(filteredData("CATEGORY"));
-    expect(h.main.getCurrentResult().data).toEqual(mainData("M1"));
-    expect(entriesOf(h.queryClient, "mediaFiltered")).toHaveLength(1);
-    expect(entriesOf(h.queryClient, "mediaMain")).toHaveLength(1);
-    h.cleanup();
-  });
-
-  it("a new filtered result replaces the previous filtered result", async () => {
-    const h = mediaHarness();
-    h.setDates("2026-08-01", "2026-10-01");
-    await h.respond({ IncludeMain: true }, rawMediaMain("M1"));
-    h.setCrossFilter({ kind: "source", value: "SOURCE A" });
-    await h.respond({ SourceFilter: "SOURCE A" }, rawMediaFiltered("A"));
-    h.setCrossFilter({ kind: "source", value: "SOURCE B" });
-    expect(h.filtered.getCurrentResult().data).toBeUndefined(); // A is not shown for B
-    await h.respond({ SourceFilter: "SOURCE B" }, rawMediaFiltered("B"));
-
-    expect(h.filtered.getCurrentResult().data).toEqual(filteredData("B"));
-    expect(entriesOf(h.queryClient, "mediaFiltered")).toHaveLength(1);
-    h.cleanup();
-  });
-
-  it("filtered data is removed when main data for a new date range arrives", async () => {
-    const h = mediaHarness();
-    h.setDates("2026-08-01", "2026-10-01");
-    await h.respond({ IncludeMain: true }, rawMediaMain("M1"));
-    h.setCrossFilter({ kind: "source", value: "SOURCE A" });
-    await h.respond({ SourceFilter: "SOURCE A" }, rawMediaFiltered("A"));
-
-    h.setDates("2026-09-01", "2026-10-01"); // clears the cross-filter
-    expect(h.main.getCurrentResult().data).toBeUndefined();
-    expect(h.filtered.getCurrentResult().data).toBeUndefined();
-    // The old filtered result is only removed once new main data arrives.
-    expect(entriesOf(h.queryClient, "mediaFiltered")).toHaveLength(1);
-
-    await h.respond({ StartDate: "2026-09-01", IncludeMain: true }, rawMediaMain("M2"));
-    expect(h.main.getCurrentResult().data).toEqual(mainData("M2"));
-    expect(entriesOf(h.queryClient, "mediaFiltered")).toHaveLength(0);
-    expect(entriesOf(h.queryClient, "mediaMain")).toHaveLength(1);
-    h.cleanup();
-  });
-
-  it("an in-flight filtered request for the old date range is dropped", async () => {
-    const h = mediaHarness();
-    h.setDates("2026-08-01", "2026-10-01");
-    await h.respond({ IncludeMain: true }, rawMediaMain("M1"));
-    h.setCrossFilter({ kind: "source", value: "SOURCE A" });
-    const lateFiltered = h.find({ SourceFilter: "SOURCE A" });
-
-    h.setDates("2026-09-01", "2026-10-01");
-    await h.respond({ StartDate: "2026-09-01", IncludeMain: true }, rawMediaMain("M2"));
-    lateFiltered.resolve(rawMediaFiltered("A"));
+    h.find({ StartDate: "2026-09-01" }).resolve(rawMedia("NEW"));
+    await settle();
+    early.resolve(rawMedia("OLD")); // finishes late
     await settle();
 
-    expect(entriesOf(h.queryClient, "mediaFiltered")).toHaveLength(0);
-    expect(h.filtered.getCurrentResult().data).toBeUndefined();
-    expect(h.main.getCurrentResult().data).toEqual(mainData("M2"));
-    h.cleanup();
+    expect(h.shown()).toEqual(mediaData("NEW", SEP));
+    expect(cached(h.queryClient, mediaKey(AUG))).toBeUndefined();
+    expect(entriesOf(h.queryClient, "mediaAnalytics")).toHaveLength(1);
+    h.unsubscribe();
   });
 
-  it("a refetch of the same main data keeps the filtered result", async () => {
+  it("cross-filter clicks start no request and highlight the cached articles", async () => {
     const h = mediaHarness();
-    h.setDates("2026-08-01", "2026-10-01");
-    await h.respond({ IncludeMain: true }, rawMediaMain("M1"));
-    h.setCrossFilter({ kind: "source", value: "SOURCE A" });
-    await h.respond({ SourceFilter: "SOURCE A" }, rawMediaFiltered("A"));
+    h.setDates(AUG);
+    h.requests[0].resolve(rawMedia("SOURCE A"));
+    await settle();
+    const activeKey = h.registry.getActive("mediaAnalytics");
+    const rows = h.shown()!.rows;
 
-    const refetch = h.main.refetch();
-    h.requests[2].resolve(rawMediaMain("M1"));
+    h.click({ kind: "source", value: "SOURCE A" });
+    expect(h.effective()).toEqual({ kind: "source", value: "SOURCE A", range: AUG });
+    const charts = buildMediaChartData(rows, h.effective());
+    expect(charts.sources.names).toEqual(["SOURCE A", "YAHOO ENTERTAINMENT"]);
+    expect(charts.sources.highlighted).toEqual([1, 0]);
+    expect(charts.categories.names).toEqual(["Economic Recession", "Inflation"]);
+    expect(charts.categories.highlighted).toEqual([0, 1]);
+
+    h.click({ kind: "category", value: "Inflation" }); // replaces the source filter
+    h.click({ kind: "category", value: "Inflation" }); // same element: clears it
+    expect(h.filters.mediaCrossFilter.get()).toBeNull();
+
+    expect(h.requests).toHaveLength(1);
+    expect(h.registry.getActive("mediaAnalytics")).toBe(activeKey);
+    h.unsubscribe();
+  });
+
+  it("dates changed and reverted within the debounce: no request, cross-filter kept", async () => {
+    const h = mediaHarness();
+    h.setDates(AUG);
+    h.requests[0].resolve(rawMedia("SOURCE A"));
+    await settle();
+    h.click({ kind: "source", value: "SOURCE A" });
+
+    h.editDates(SEP);
+    h.editDates(AUG);
+    h.commit();
+
+    expect(h.requests).toHaveLength(1);
+    expect(h.effective()).toEqual({ kind: "source", value: "SOURCE A", range: AUG });
+    h.unsubscribe();
+  });
+
+  it("the cross-filter stays on the old data while a new range loads and is cleared when it arrives", async () => {
+    const h = mediaHarness();
+    h.setDates(AUG);
+    h.requests[0].resolve(rawMedia("SOURCE A"));
+    await settle();
+    h.click({ kind: "source", value: "SOURCE A" });
+
+    // Record what a page would render, in order.
+    const renders: string[] = [];
+    const record = () =>
+      renders.push(`${h.shown()?.range.startDate}|${h.effective()?.value ?? "none"}`);
+    const unsubscribes = [h.observer.subscribe(record), h.filters.mediaCrossFilter.subscribe(record)];
+
+    h.setDates(SEP);
+    // While loading: old data (placeholder) with its own cross-filter.
+    expect(h.observer.getCurrentResult().isPlaceholderData).toBe(true);
+    expect(h.effective()?.value).toBe("SOURCE A");
+
+    h.find({ StartDate: "2026-09-01" }).resolve(rawMedia("B"));
+    await settle();
+
+    expect(h.shown()).toEqual(mediaData("B", SEP));
+    expect(h.filters.mediaCrossFilter.get()).toBeNull();
+    // The old cross-filter was never applied to the new data, and it was not
+    // dropped while the old data was still shown.
+    expect(renders).not.toContain("2026-09-01|SOURCE A");
+    expect(renders).not.toContain("2026-08-01|none");
+    unsubscribes.forEach((unsubscribe) => unsubscribe());
+    h.unsubscribe();
+  });
+
+  it("a refetch of the same range keeps the cross-filter", async () => {
+    const h = mediaHarness();
+    h.setDates(AUG);
+    h.requests[0].resolve(rawMedia("SOURCE A"));
+    await settle();
+    h.click({ kind: "source", value: "SOURCE A" });
+
+    const refetch = h.observer.refetch();
+    h.requests[1].resolve(rawMedia("SOURCE A"));
     await refetch;
     await settle();
 
-    expect(h.filtered.getCurrentResult().data).toEqual(filteredData("A"));
-    expect(entriesOf(h.queryClient, "mediaFiltered")).toHaveLength(1);
-    h.cleanup();
+    expect(h.effective()).toEqual({ kind: "source", value: "SOURCE A", range: AUG });
+    h.unsubscribe();
+  });
+
+  it("new data arriving while the user is on another page still clears the cross-filter", async () => {
+    const h = mediaHarness();
+    h.setDates(AUG);
+    h.requests[0].resolve(rawMedia("SOURCE A"));
+    await settle();
+    h.click({ kind: "source", value: "SOURCE A" });
+    h.setDates(SEP);
+    h.unsubscribe(); // user leaves the page
+
+    h.find({ StartDate: "2026-09-01" }).resolve(rawMedia("B"));
+    await settle();
+    expect(h.filters.mediaCrossFilter.get()).toBeNull();
+    expect(h.queryClient.getQueryData(mediaKey(SEP))).toEqual(mediaData("B", SEP));
   });
 });

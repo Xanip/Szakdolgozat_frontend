@@ -6,6 +6,8 @@
  * full response processing.
  */
 
+import type { MediaDateRange } from "@/types/filters";
+
 /** Filter option data derived from GET /exchange-rates/pages. */
 export type DimensionData = {
   currencies: {
@@ -49,22 +51,41 @@ export type DailyHeatmapData = {
   };
 };
 
-/** Column order of each `MediaAnalyticsData.charts.tableData` row. */
-export const MEDIA_TABLE_COLUMNS = [
-  "Date",
-  "SourceName",
-  "CategoryName",
-  "Title",
-  "URL",
-] as const;
+/** One news article; `Date` is an ISO date (`YYYY-MM-DD`). */
+export type MediaArticle = {
+  Date: string;
+  SourceName: string;
+  CategoryName: string;
+  Title: string;
+  URL: string;
+};
 
+/**
+ * Cached Media Analytics result: the articles of the date range, and the
+ * range itself. With `keepPreviousData` the page may show this result while
+ * another range loads, so the data must say which range it belongs to.
+ */
 export type MediaAnalyticsData = {
-  charts: {
-    /** Rows ordered as `MEDIA_TABLE_COLUMNS`. */
-    tableData: (string | null)[][];
-    categoriesName: string[] | null;
-    categoriesData: number[] | null;
-    sourcesName: string[] | null;
-    sourcesData: number[] | null;
-  };
+  range: MediaDateRange;
+  rows: MediaArticle[];
+};
+
+/**
+ * Data of one Media Analytics chart, derived on the frontend.
+ * The three arrays are element-aligned: `names[i]` has `totals[i]` articles in
+ * the date range and `highlighted[i]` of them match the active cross-filter.
+ * Order follows `totals` (descending, ties by name), so it does not change
+ * when a cross-filter is set. `highlighted` is `null` without a cross-filter.
+ */
+export type MediaChartSeries = {
+  names: string[];
+  totals: number[];
+  highlighted: number[] | null;
+};
+
+export type MediaChartData = {
+  /** articles per category. */
+  categories: MediaChartSeries;
+  /** articles per source. */
+  sources: MediaChartSeries;
 };

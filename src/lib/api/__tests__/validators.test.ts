@@ -18,8 +18,7 @@ import {
   rawDimensions,
   rawFx,
   rawHeatmap,
-  rawMediaFiltered,
-  rawMediaMain,
+  rawMedia,
 } from "./fixtures";
 
 /** Asserts a ResponseValidationError reported at `path`. */
@@ -154,48 +153,32 @@ describe("Daily Heatmap validator", () => {
 });
 
 describe("Media Analytics validator", () => {
-  it("accepts main and filtered responses in their own mode", () => {
-    expect(validateMediaAnalyticsResponse(rawMediaMain(), "main")).toEqual(
-      rawMediaMain(),
-    );
-    expect(validateMediaAnalyticsResponse(rawMediaFiltered(), "filtered")).toEqual(
-      rawMediaFiltered(),
-    );
+  it("accepts the documented { main: { table } } shape and an empty table", () => {
+    expect(validateMediaAnalyticsResponse(rawMedia())).toEqual(rawMedia());
+    const empty = { main: { table: [] } };
+    expect(validateMediaAnalyticsResponse(empty)).toEqual(empty);
   });
 
-  it("rejects a response that does not match the IncludeMain mode", () => {
-    expectInvalid(() => validateMediaAnalyticsResponse(rawMediaFiltered(), "main"), "$.main");
-    expectInvalid(
-      () => validateMediaAnalyticsResponse(rawMediaMain(), "filtered"),
-      "$.main",
-    );
-    expectInvalid(
-      () =>
-        validateMediaAnalyticsResponse(
-          { main: rawMediaMain().main, filtered: rawMediaFiltered().filtered },
-          "main",
-        ),
-      "$.filtered",
-    );
+  it("rejects a missing main or table", () => {
+    expectInvalid(() => validateMediaAnalyticsResponse({}), "$.main");
+    expectInvalid(() => validateMediaAnalyticsResponse({ main: null }), "$.main");
+    expectInvalid(() => validateMediaAnalyticsResponse({ main: {} }), "$.main.table");
   });
 
-  it("rejects missing fields and non-integer counts", () => {
-    const missing = clone(rawMediaMain()) as unknown as {
+  it("rejects missing and null row fields", () => {
+    const missing = clone(rawMedia()) as unknown as {
       main: { table: Record<string, unknown>[] };
     };
     delete missing.main.table[0].URL;
-    expectInvalid(
-      () => validateMediaAnalyticsResponse(missing, "main"),
-      "$.main.table[0].URL",
-    );
+    expectInvalid(() => validateMediaAnalyticsResponse(missing), "$.main.table[0].URL");
 
-    const count = clone(rawMediaMain()) as unknown as {
-      main: { by_source: { Count: unknown }[] };
+    const nullSource = clone(rawMedia()) as unknown as {
+      main: { table: Record<string, unknown>[] };
     };
-    count.main.by_source[0].Count = 1.5;
+    nullSource.main.table[1].SourceName = null;
     expectInvalid(
-      () => validateMediaAnalyticsResponse(count, "main"),
-      "$.main.by_source[0].Count",
+      () => validateMediaAnalyticsResponse(nullSource),
+      "$.main.table[1].SourceName",
     );
   });
 });

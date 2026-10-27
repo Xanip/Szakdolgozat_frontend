@@ -5,6 +5,7 @@ import type {
   DailyHeatmapFilters,
   FxPerformanceFilters,
   MediaAnalyticsFilters,
+  MediaDateRange,
 } from "@/types/filters";
 
 /*
@@ -26,9 +27,6 @@ export type DailyHeatmapParams = {
 export type MediaAnalyticsParams = {
   StartDate: string;
   ToDate: string;
-  SourceFilter: string | null;
-  CategoryFilter: string | null;
-  IncludeMain: boolean;
 };
 
 /**
@@ -73,69 +71,36 @@ export function buildDailyHeatmapParams(
   };
 }
 
-/** Main Media Analytics request: dates only, `IncludeMain=true`. */
-export function buildMediaMainParams(
+/** Builds Media Analytics params; `null` until both dates are set. */
+export function buildMediaAnalyticsParams(
   filters: MediaAnalyticsFilters,
 ): MediaAnalyticsParams | null {
   if (!filters.startDate || !filters.toDate) return null;
-  return {
-    StartDate: filters.startDate,
-    ToDate: filters.toDate,
-    SourceFilter: null,
-    CategoryFilter: null,
-    IncludeMain: true,
-  };
+  return { StartDate: filters.startDate, ToDate: filters.toDate };
 }
 
-/**
- * Cross-filtered Media Analytics request: exactly one of Source/Category,
- * `IncludeMain=false`. `null` when there is no cross-filter.
- */
-export function buildMediaFilteredParams(
-  filters: MediaAnalyticsFilters,
-): MediaAnalyticsParams | null {
-  const crossFilter = filters.crossFilter;
-  if (!filters.startDate || !filters.toDate || !crossFilter) return null;
-  return {
-    StartDate: filters.startDate,
-    ToDate: filters.toDate,
-    SourceFilter: crossFilter.kind === "source" ? crossFilter.value : null,
-    CategoryFilter: crossFilter.kind === "category" ? crossFilter.value : null,
-    IncludeMain: false,
-  };
+/** The date range of a (non-idle) Media Analytics key, else `null`. */
+export function getMediaDateRange(queryKey: QueryKey): MediaDateRange | null {
+  const [scope, params] = queryKey;
+  if (scope !== "Media_analytics" || !isRecord(params)) return null;
+  const { StartDate, ToDate } = params;
+  return typeof StartDate === "string" && typeof ToDate === "string"
+    ? { startDate: StartDate, toDate: ToDate }
+    : null;
 }
 
-/**
- * Display roles that keep exactly one active result each. Media Analytics has
- * two roles (main + filtered), so the page keeps at most two results.
- */
-export type ResultRole =
-  | "fxPerformance"
-  | "dailyHeatmap"
-  | "mediaMain"
-  | "mediaFiltered";
+/** Display roles; each page keeps exactly one active result. */
+export type ResultRole = "fxPerformance" | "dailyHeatmap" | "mediaAnalytics";
+
+const ROLE_BY_SCOPE: Readonly<Record<string, ResultRole>> = {
+  FX_performance: "fxPerformance",
+  Daily_heatmap: "dailyHeatmap",
+  Media_analytics: "mediaAnalytics",
+};
 
 /** Derives the role from a query key; `null` for untracked/idle keys. */
 export function getResultRole(queryKey: QueryKey): ResultRole | null {
   const [scope, params] = queryKey;
-  if (!isRecord(params)) return null;
-  switch (scope) {
-    case "FX_performance":
-      return "fxPerformance";
-    case "Daily_heatmap":
-      return "dailyHeatmap";
-    case "Media_analytics":
-      return params.IncludeMain === true ? "mediaMain" : "mediaFiltered";
-    default:
-      return null;
-  }
-}
-
-/** Returns the `[StartDate, ToDate]` of a Media Analytics key, if any. */
-export function getMediaDateRange(
-  queryKey: QueryKey,
-): readonly [unknown, unknown] | null {
-  const params = queryKey[1];
-  if (queryKey[0] !== "Media_analytics" || !isRecord(params)) return null;
-  return [params.StartDate, params.ToDate];
+  if (typeof scope !== "string" || !isRecord(params)) return null;
+  return Object.hasOwn(ROLE_BY_SCOPE, scope) ? ROLE_BY_SCOPE[scope] : null;
 }

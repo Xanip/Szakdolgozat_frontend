@@ -19,15 +19,30 @@ export type DailyHeatmapFilters = {
   currencies: readonly string[] | null;
 };
 
-/** Media Analytics cross-filter: Source and Category are mutually exclusive. */
-export type MediaCrossFilter = {
-  kind: "source" | "category";
-  value: string;
-};
-
+/** Media Analytics main filter: the only values sent to the backend. */
 export type MediaAnalyticsFilters = {
   /** ISO dates (`YYYY-MM-DD`). */
   startDate: string | null;
   toDate: string | null;
-  crossFilter: MediaCrossFilter | null;
+};
+
+/** Date range a Media Analytics result was loaded for (ISO dates). */
+export type MediaDateRange = {
+  startDate: string;
+  toDate: string;
+};
+
+/** A chart element the user clicked: one Source or one Category. */
+export type MediaCrossSelection = {
+  kind: "source" | "category";
+  value: string;
+};
+
+/**
+ * Media Analytics cross-filter: Source and Category are mutually exclusive.
+ * `range` is the date range of the data it was picked from: the filter only
+ * applies to that data and is cleared when data for another range arrives.
+ */
+export type MediaCrossFilter = MediaCrossSelection & {
+  range: MediaDateRange;
 };

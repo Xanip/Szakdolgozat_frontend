@@ -93,20 +93,20 @@ export function dailyHeatmapQueryOptions(
   });
 }
 
-/** Main (`IncludeMain=true`) or cross-filtered (`IncludeMain=false`) request. */
+/** Articles of the date range. Cross-filters are applied on the frontend.*/
 export function mediaAnalyticsQueryOptions(
   params: MediaAnalyticsParams | null,
   http?: HttpGet,
 ) {
-  const mode = params?.IncludeMain ? "main" : "filtered";
   return queryOptions({
     queryKey: queryKeys.mediaAnalytics(params),
+    placeholderData: keepPreviousData,
     queryFn: params
       ? createEndpointQueryFn({
           path: ENDPOINTS.mediaAnalytics,
           params,
-          validate: (body) => validateMediaAnalyticsResponse(body, mode),
-          process: (raw) => processMediaAnalytics(raw, mode),
+          validate: validateMediaAnalyticsResponse,
+          process: (raw) =>processMediaAnalytics(raw, {startDate: params.StartDate,toDate: params.ToDate,}),
           http,
         })
       : skipToken,

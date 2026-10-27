@@ -4,7 +4,6 @@ import type {
   RawDimensionsResponse,
   RawFxPerformanceResponse,
   RawMediaAnalyticsResponse,
-  RawMediaDataset,
 } from "@/types/api/raw";
 
 /* Valid payloads shaped like the documented backend responses (docs/*_JSON.md). */
@@ -60,34 +59,28 @@ export function rawHeatmap(
   };
 }
 
-export function rawMediaDataset(label = "SYNTHETIC"): RawMediaDataset {
+/** Shaped like docs/media_analytics_JSON.md; `label` names the source. */
+export function rawMedia(label = "SYNTHETIC"): RawMediaAnalyticsResponse {
   return {
-    table: [
-      {
-        Date: "2026-08-01",
-        SourceName: label,
-        CategoryName: "Inflation",
-        Title: `${label} title`,
-        URL: "https://synthetic-news.example/2026/08/01/article-0001",
-      },
-    ],
-    by_category: [
-      { Name: "Economic Recession", Count: 12 },
-      { Name: "Inflation", Count: 3 },
-    ],
-    by_source: [
-      { Name: label, Count: 15 },
-      { Name: "YAHOO ENTERTAINMENT", Count: 4 },
-    ],
+    main: {
+      table: [
+        {
+          Date: "2026-08-01",
+          SourceName: label,
+          CategoryName: "Inflation",
+          Title: `${label} title`,
+          URL: "https://synthetic-news.example/2026/08/01/article-0001",
+        },
+        {
+          Date: "2026-08-02",
+          SourceName: "YAHOO ENTERTAINMENT",
+          CategoryName: "Economic Recession",
+          Title: "Second title",
+          URL: "https://synthetic-news.example/2026/08/02/article-0002",
+        },
+      ],
+    },
   };
-}
-
-export function rawMediaMain(label = "MAIN"): RawMediaAnalyticsResponse {
-  return { main: rawMediaDataset(label), filtered: null };
-}
-
-export function rawMediaFiltered(label = "FILTERED"): RawMediaAnalyticsResponse {
-  return { main: null, filtered: rawMediaDataset(label) };
 }
 
 export type PendingRequest = {

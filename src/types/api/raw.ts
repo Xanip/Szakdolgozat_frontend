@@ -68,7 +68,12 @@ export type RawDailyHeatmapResponse = {
   data: (number | null)[][];
 };
 
-/** GET /exchange-rates/pages/Media_analytics */
+/**
+ * GET /exchange-rates/pages/Media_analytics?StartDate=…&ToDate=…
+ *
+ * One news article. Every field is a required string (`MediaTableRow` in
+ * `response_models/mediaResponses.py`); `Date` is an ISO date (`YYYY-MM-DD`).
+ */
 export type RawMediaTableRow = {
   Date: string;
   SourceName: string;
@@ -77,18 +82,8 @@ export type RawMediaTableRow = {
   URL: string;
 };
 
-export type RawMediaGroupCount = {
-  Name: string;
-  Count: number;
-};
-
-export type RawMediaDataset = {
-  table: RawMediaTableRow[];
-  by_category: RawMediaGroupCount[];
-  by_source: RawMediaGroupCount[];
-};
-
-export type RawMediaAnalyticsResponse = {
-  main: RawMediaDataset | null;
-  filtered: RawMediaDataset | null;
-};
+/**
+ * The backend returns only the articles of the date range; chart data is
+ * computed on the frontend (`lib/media/mediaCharts.ts`).
+ */
+export type RawMediaAnalyticsResponse = {main: {table: RawMediaTableRow[];};};

@@ -3,20 +3,9 @@ import { describe, expect, it } from "vitest";
 import { processDailyHeatmap } from "@/lib/api/processors/dailyHeatmap";
 import { processDimensions } from "@/lib/api/processors/dimensions";
 import { processFxPerformance } from "@/lib/api/processors/fxPerformance";
-import {
-  processMediaAnalytics,
-  processMediaDataset,
-} from "@/lib/api/processors/mediaAnalytics";
-import { MEDIA_TABLE_COLUMNS } from "@/types/api/display";
+import { processMediaAnalytics } from "@/lib/api/processors/mediaAnalytics";
 
-import {
-  rawDimensions,
-  rawFx,
-  rawHeatmap,
-  rawMediaDataset,
-  rawMediaFiltered,
-  rawMediaMain,
-} from "./fixtures";
+import { rawDimensions, rawFx, rawHeatmap, rawMedia } from "./fixtures";
 
 describe("processDimensions", () => {
   it("maps dimension tables to filter options", () => {
@@ -82,38 +71,18 @@ describe("processDailyHeatmap", () => {
 });
 
 describe("processMediaAnalytics", () => {
-  it("splits group counts into element-aligned name/value arrays", () => {
-    const data = processMediaDataset(rawMediaDataset());
-    expect(data.charts.categoriesName).toEqual(["Economic Recession", "Inflation"]);
-    expect(data.charts.categoriesData).toEqual([12, 3]);
-    expect(data.charts.sourcesName).toEqual(["SYNTHETIC", "YAHOO ENTERTAINMENT"]);
-    expect(data.charts.sourcesData).toEqual([15, 4]);
+  const range = { startDate: "2026-08-01", toDate: "2026-10-01" };
+
+  it("keeps the article rows as objects, in backend order, with the requested range", () => {
+    const raw = rawMedia();
+    expect(processMediaAnalytics(raw, range)).toEqual({ range, rows: raw.main.table });
+    expect(processMediaAnalytics(raw, range).rows.map((row) => row.Date)).toEqual([
+      "2026-08-01",
+      "2026-08-02",
+    ]);
   });
 
-  it("builds table rows in MEDIA_TABLE_COLUMNS order", () => {
-    const raw = rawMediaDataset();
-    const [row] = processMediaDataset(raw).charts.tableData;
-    expect(row).toEqual(MEDIA_TABLE_COLUMNS.map((column) => raw.table[0][column]));
-  });
-
-  it("keeps empty datasets as empty arrays", () => {
-    const data = processMediaDataset({ table: [], by_category: [], by_source: [] });
-    expect(data.charts).toEqual({
-      tableData: [],
-      categoriesName: [],
-      categoriesData: [],
-      sourcesName: [],
-      sourcesData: [],
-    });
-  });
-
-  it("selects the dataset for the request mode", () => {
-    expect(processMediaAnalytics(rawMediaMain("M"), "main").charts.sourcesName?.[0]).toBe(
-      "M",
-    );
-    expect(
-      processMediaAnalytics(rawMediaFiltered("F"), "filtered").charts.sourcesName?.[0],
-    ).toBe("F");
-    expect(() => processMediaAnalytics(rawMediaMain(), "filtered")).toThrow();
+  it("keeps an empty table as empty rows", () => {
+    expect(processMediaAnalytics({ main: { table: [] } }, range)).toEqual({ range, rows: [] });
   });
 });

@@ -5,11 +5,7 @@ import {
   type QueryKey,
 } from "@tanstack/react-query";
 
-import {
-  getMediaDateRange,
-  getResultRole,
-  type ResultRole,
-} from "@/lib/api/queryKeys";
+import { getResultRole, type ResultRole } from "@/lib/api/queryKeys";
 
 /** Any cached query, as passed to `QueryCache` callbacks. */
 type AnyQuery = Query<unknown, unknown, unknown>;
@@ -42,17 +38,6 @@ export function createActiveResultRegistry(): ActiveResultRegistry {
   };
 }
 
-function sameMediaDateRange(a: QueryKey, b: QueryKey): boolean {
-  const rangeA = getMediaDateRange(a);
-  const rangeB = getMediaDateRange(b);
-  return (
-    rangeA !== null &&
-    rangeB !== null &&
-    rangeA[0] === rangeB[0] &&
-    rangeA[1] === rangeB[1]
-  );
-}
-
 /**
  * Applies the active-result lifecycle when a query fetch succeeds. Wired into
  * the `QueryCache` `onSuccess` callback, so it runs synchronously right after
@@ -65,35 +50,30 @@ function sameMediaDateRange(a: QueryKey, b: QueryKey): boolean {
  * - The result is the active one: every other entry of the same role is
  *   removed (superseded results; still-running obsolete requests are dropped
  *   with them, so they cannot write back later).
- * - A new Media Analytics main result also removes filtered results that
- *   belong to a different date range.
+ *
+ * The rule is the same for every page; no role depends on another one.
+ * Returns the role when the result was kept as the active one (so callers
+ * can react to new active data), otherwise `null`.
  */
 export function handleQuerySuccess(
   cache: QueryCache,
   registry: ActiveResultRegistry,
   query: AnyQuery,
-): void {
+): ResultRole | null {
   const role = getResultRole(query.queryKey);
-  if (role === null) return;
+  if (role === null) return null;
 
   if (!registry.isActive(role, query.queryHash)) {
     cache.remove(query);
-    return;
+    return null;
   }
 
   for (const other of cache.getAll()) {
-    if (other === query) continue;
-    const otherRole = getResultRole(other.queryKey);
-    if (otherRole === role) {
-      cache.remove(other);
-    } else if (
-      role === "mediaMain" &&
-      otherRole === "mediaFiltered" &&
-      !sameMediaDateRange(other.queryKey, query.queryKey)
-    ) {
+    if (other !== query && getResultRole(other.queryKey) === role) {
       cache.remove(other);
     }
   }
+  return role;
 }
 
 /**

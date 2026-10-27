@@ -2,19 +2,23 @@ import type { ActiveResultRegistry } from "@/lib/api/activeResult";
 import {
   buildDailyHeatmapParams,
   buildFxPerformanceParams,
-  buildMediaFilteredParams,
-  buildMediaMainParams,
+  buildMediaAnalyticsParams,
   queryKeys,
 } from "@/lib/api/queryKeys";
 import {
   createDebouncedState,
   type DebouncedState,
 } from "@/lib/filters/debouncedState";
+import {
+  createImmediateState,
+  type ImmediateState,
+} from "@/lib/filters/immediateState";
 import type {
   DailyHeatmapFilters,
   FxPerformanceFilters,
   MediaAnalyticsFilters,
   MediaCrossFilter,
+  MediaDateRange,
 } from "@/types/filters";
 
 /**
@@ -37,13 +41,15 @@ export const INITIAL_DAILY_HEATMAP_FILTERS: DailyHeatmapFilters = {
 export const INITIAL_MEDIA_ANALYTICS_FILTERS: MediaAnalyticsFilters = {
   startDate: null,
   toDate: null,
-  crossFilter: null,
 };
 
 export type PageFilterStores = {
   fxPerformance: DebouncedState<FxPerformanceFilters>;
   dailyHeatmap: DebouncedState<DailyHeatmapFilters>;
+  /** Date range: debounced, drives the Media Analytics request. */
   mediaAnalytics: DebouncedState<MediaAnalyticsFilters>;
+  /** Cross-filter: applies immediately, never starts a request. */
+  mediaCrossFilter: ImmediateState<MediaCrossFilter | null>;
 };
 
 export type PageFilterOptions = {
@@ -52,13 +58,17 @@ export type PageFilterOptions = {
     fxPerformance?: FxPerformanceFilters;
     dailyHeatmap?: DailyHeatmapFilters;
     mediaAnalytics?: MediaAnalyticsFilters;
+    mediaCrossFilter?: MediaCrossFilter | null;
   };
 };
 
 /**
  * Creates the per-page filter state, owned by the app-level provider (not by
- * the pages). Each commit marks the matching query key as the active result
- * of its role, so a late response for older filters can never become active.
+ * the pages). Each commit of a debounced store marks the matching query key
+ * as the active result of its role, so a late response for older filters can
+ * never become active. The cross-filter store has no commit hook: it is not
+ * part of any query key. It is cleared only when data for another date range
+ * arrives (`clearStaleMediaCrossFilter`, wired in `createAppData`).
  */
 export function createPageFilterStores(
   registry: ActiveResultRegistry,
@@ -82,12 +92,10 @@ export function createPageFilterStores(
   };
 
   const activateMedia = (filters: MediaAnalyticsFilters) => {
-    const main = buildMediaMainParams(filters);
-    const filtered = buildMediaFilteredParams(filters);
-    registry.setActive("mediaMain", main ? queryKeys.mediaAnalytics(main) : null);
+    const params = buildMediaAnalyticsParams(filters);
     registry.setActive(
-      "mediaFiltered",
-      filtered ? queryKeys.mediaAnalytics(filtered) : null,
+      "mediaAnalytics",
+      params ? queryKeys.mediaAnalytics(params) : null,
     );
   };
 
@@ -114,13 +122,13 @@ export function createPageFilterStores(
       delayMs,
       onCommit: activateMedia,
     }),
+    mediaCrossFilter: createImmediateState(
+      options.initial?.mediaCrossFilter ?? null,
+    ),
   };
 }
 
-/**
- * New Media Analytics date range. A cross-filter always refers to the main
- * data it was picked from, so changing the dates clears it.
- */
+/** New Media Analytics date range; unchanged dates keep the same object. */
 export function withMediaDateRange(
   filters: MediaAnalyticsFilters,
   startDate: string | null,
@@ -129,23 +137,55 @@ export function withMediaDateRange(
   if (filters.startDate === startDate && filters.toDate === toDate) {
     return filters;
   }
-  return { startDate, toDate, crossFilter: null };
+  return { startDate, toDate };
 }
 
-/** Sets (or clears) the single Source-or-Category cross-filter. */
-export function withMediaCrossFilter(
-  filters: MediaAnalyticsFilters,
-  crossFilter: MediaCrossFilter | null,
-): MediaAnalyticsFilters {
-  const current = filters.crossFilter;
-  if (
-    current === crossFilter ||
-    (current !== null &&
-      crossFilter !== null &&
-      current.kind === crossFilter.kind &&
-      current.value === crossFilter.value)
-  ) {
-    return filters;
-  }
-  return { ...filters, crossFilter };
+export function sameMediaRange(a: MediaDateRange, b: MediaDateRange): boolean {
+  return a.startDate === b.startDate && a.toDate === b.toDate;
+}
+
+function sameCrossFilter(a: MediaCrossFilter, b: MediaCrossFilter): boolean {
+  return (
+    a.kind === b.kind && a.value === b.value && sameMediaRange(a.range, b.range)
+  );
+}
+
+/**
+ * Chart click: selecting the active element again clears the cross-filter,
+ * any other element replaces it (Source and Category exclude each other).
+ */
+export function toggleMediaCrossFilter(
+  current: MediaCrossFilter | null,
+  clicked: MediaCrossFilter,
+): MediaCrossFilter | null {
+  return current !== null && sameCrossFilter(current, clicked) ? null : clicked;
+}
+
+/**
+ * The cross-filter that applies to the displayed data: only one picked from
+ * this very data (same date range). Display never depends on when a stale
+ * filter is removed from the store.
+ */
+export function effectiveMediaCrossFilter(
+  stored: MediaCrossFilter | null,
+  dataRange: MediaDateRange | null,
+): MediaCrossFilter | null {
+  return stored !== null && dataRange !== null && sameMediaRange(stored.range, dataRange)
+    ? stored
+    : null;
+}
+
+/**
+ * New Media Analytics data became the active result: a cross-filter picked
+ * from data of another date range no longer applies and is removed. Changing
+ * the date controls alone (e.g. changing and reverting them within the
+ * debounce) never clears it; a refetch of the same range keeps it.
+ */
+export function clearStaleMediaCrossFilter(
+  store: ImmediateState<MediaCrossFilter | null>,
+  newDataRange: MediaDateRange,
+): void {
+  store.update((current) =>
+    current !== null && !sameMediaRange(current.range, newDataRange) ? null : current,
+  );
 }

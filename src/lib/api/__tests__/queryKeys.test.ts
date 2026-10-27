@@ -5,8 +5,7 @@ import { apiClient, ENDPOINTS, serializeQueryParams } from "@/lib/api/client";
 import {
   buildDailyHeatmapParams,
   buildFxPerformanceParams,
-  buildMediaFilteredParams,
-  buildMediaMainParams,
+  buildMediaAnalyticsParams,
   getResultRole,
   queryKeys,
 } from "@/lib/api/queryKeys";
@@ -81,55 +80,31 @@ describe("query keys", () => {
     ).not.toBe(hashKey(queryKeys.dailyHeatmap({ Currencies: ["USD", "HUF"] })));
   });
 
-  it("Media Analytics main and cross-filtered requests use separate keys", () => {
-    const filters = {
+  it("Media Analytics key holds only the date range", () => {
+    const params = buildMediaAnalyticsParams({
       startDate: "2026-08-01",
       toDate: "2026-10-01",
-      crossFilter: { kind: "source" as const, value: "YAHOO ENTERTAINMENT" },
-    };
-    const main = queryKeys.mediaAnalytics(buildMediaMainParams(filters));
-    const filtered = queryKeys.mediaAnalytics(buildMediaFilteredParams(filters));
-
-    expect(main).toEqual([
+    });
+    expect(queryKeys.mediaAnalytics(params)).toEqual([
       "Media_analytics",
-      {
-        StartDate: "2026-08-01",
-        ToDate: "2026-10-01",
-        SourceFilter: null,
-        CategoryFilter: null,
-        IncludeMain: true,
-      },
+      { StartDate: "2026-08-01", ToDate: "2026-10-01" },
     ]);
-    expect(filtered).toEqual([
-      "Media_analytics",
-      {
-        StartDate: "2026-08-01",
-        ToDate: "2026-10-01",
-        SourceFilter: "YAHOO ENTERTAINMENT",
-        CategoryFilter: null,
-        IncludeMain: false,
-      },
-    ]);
-    expect(getResultRole(main)).toBe("mediaMain");
-    expect(getResultRole(filtered)).toBe("mediaFiltered");
   });
 
-  it("a category cross-filter sets only CategoryFilter", () => {
-    const params = buildMediaFilteredParams({
-      startDate: "2026-08-01",
-      toDate: "2026-10-01",
-      crossFilter: { kind: "category", value: "Inflation" },
-    });
-    expect(params).toMatchObject({ SourceFilter: null, CategoryFilter: "Inflation" });
-    expect(
-      buildMediaFilteredParams({ startDate: "2026-08-01", toDate: "2026-10-01", crossFilter: null }),
-    ).toBeNull();
+  it("Media Analytics params are null until both dates are set", () => {
+    expect(buildMediaAnalyticsParams({ startDate: "2026-08-01", toDate: null })).toBeNull();
+    expect(buildMediaAnalyticsParams({ startDate: null, toDate: "2026-10-01" })).toBeNull();
   });
 
   it("maps keys to roles; idle keys are untracked", () => {
     expect(getResultRole(queryKeys.fxPerformance(null))).toBeNull();
+    expect(getResultRole(queryKeys.mediaAnalytics(null))).toBeNull();
     expect(getResultRole(queryKeys.dimensions())).toBeNull();
     expect(getResultRole(queryKeys.dailyHeatmap({ Currencies: null }))).toBe("dailyHeatmap");
+    expect(
+      getResultRole(queryKeys.mediaAnalytics({ StartDate: "2026-08-01", ToDate: "2026-10-01" })),
+    ).toBe("mediaAnalytics");
+    expect(getResultRole(["toString", {}])).toBeNull(); // no prototype lookups
   });
 });
 
@@ -149,19 +124,11 @@ describe("request serialization", () => {
     ).toBe("BaseCurrency=USD&TargetCurrency=HUF&StartDate=2026-08-01");
   });
 
-  it("encodes booleans and names with spaces or slashes", () => {
-    expect(
-      serializeQueryParams({
-        StartDate: "2026-08-01",
-        ToDate: "2026-10-01",
-        SourceFilter: "YAHOO ENTERTAINMENT",
-        CategoryFilter: null,
-        IncludeMain: false,
-      }),
-    ).toBe(
-      "StartDate=2026-08-01&ToDate=2026-10-01&SourceFilter=YAHOO+ENTERTAINMENT&IncludeMain=false",
+  it("encodes booleans and values with spaces or slashes", () => {
+    expect(serializeQueryParams({ Flag: false, Name: "YAHOO ENTERTAINMENT" })).toBe(
+      "Flag=false&Name=YAHOO+ENTERTAINMENT",
     );
-    expect(new URLSearchParams(serializeQueryParams({ SourceFilter: "/FILM" })).get("SourceFilter"))
+    expect(new URLSearchParams(serializeQueryParams({ Name: "/FILM" })).get("Name"))
       .toBe("/FILM");
   });
 
@@ -173,5 +140,15 @@ describe("request serialization", () => {
       }),
     ).toBe("/api/exchange-rates/pages/Daily_heatmap?Currencies=HUF&Currencies=USD");
     expect(apiClient.getUri({ url: ENDPOINTS.dimensions })).toBe("/api/exchange-rates/pages");
+  });
+
+  it("the Media Analytics request sends only StartDate and ToDate", () => {
+    const params = buildMediaAnalyticsParams({
+      startDate: "2026-08-01",
+      toDate: "2026-10-01",
+    });
+    expect(apiClient.getUri({ url: ENDPOINTS.mediaAnalytics, params })).toBe(
+      "/api/exchange-rates/pages/Media_analytics?StartDate=2026-08-01&ToDate=2026-10-01",
+    );
   });
 });

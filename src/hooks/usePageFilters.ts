@@ -2,8 +2,9 @@ import { useCallback, useContext, useSyncExternalStore } from "react";
 
 import { AppDataContext, type AppData } from "@/lib/appData";
 import type { DebouncedState } from "@/lib/filters/debouncedState";
+import type { ImmediateState } from "@/lib/filters/immediateState";
 import {
-  withMediaCrossFilter,
+  toggleMediaCrossFilter,
   withMediaDateRange,
 } from "@/lib/filters/pageFilters";
 import type { FxPerformanceFilters, MediaCrossFilter } from "@/types/filters";
@@ -48,18 +49,34 @@ export function useDailyHeatmapFilters() {
   return { filters, setCurrencies };
 }
 
+/** Current value of an immediate (non-debounced) filter store. */
+export function useImmediateFilter<T>(state: ImmediateState<T>): T {
+  return useSyncExternalStore(state.subscribe, state.get);
+}
+
+/**
+ * Media Analytics filters: the debounced date range (draft, for the date
+ * controls) and the stored immediate cross-filter. Pages should use
+ * `useMediaAnalyticsView`, which applies the cross-filter only to the data it
+ * was picked from.
+ */
 export function useMediaAnalyticsFilters() {
-  const store = useAppData().filters.mediaAnalytics;
-  const filters = useDraftFilters(store);
+  const stores = useAppData().filters;
+  const filters = useDraftFilters(stores.mediaAnalytics);
+  const crossFilter = useImmediateFilter(stores.mediaCrossFilter);
   const setDateRange = useCallback(
     (startDate: string | null, toDate: string | null) =>
-      store.update((current) => withMediaDateRange(current, startDate, toDate)),
-    [store],
+      stores.mediaAnalytics.update((current) =>
+        withMediaDateRange(current, startDate, toDate),
+      ),
+    [stores],
   );
-  const setCrossFilter = useCallback(
-    (crossFilter: MediaCrossFilter | null) =>
-      store.update((current) => withMediaCrossFilter(current, crossFilter)),
-    [store],
+  const toggleCrossFilter = useCallback(
+    (clicked: MediaCrossFilter) =>
+      stores.mediaCrossFilter.update((current) =>
+        toggleMediaCrossFilter(current, clicked),
+      ),
+    [stores],
   );
-  return { filters, setDateRange, setCrossFilter };
+  return { filters, setDateRange, crossFilter, toggleCrossFilter };
 }
