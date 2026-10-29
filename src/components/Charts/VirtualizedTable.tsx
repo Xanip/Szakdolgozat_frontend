@@ -1,5 +1,12 @@
 import React, { useMemo, useRef } from 'react'
-import {createColumnHelper,useTable,} from '@tanstack/react-table'
+import {
+  columnFilteringFeature,
+  createColumnHelper,
+  createFilteredRowModel,
+  filterFn_equals,
+  tableFeatures,
+  useTable,
+} from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
 
 // --------------------------------------------------
@@ -7,8 +14,11 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 // --------------------------------------------------
 const DEFAULT_CELL_WIDTH = 180
 
-// Extra funkciókat, pl rendezés, szűrés stb.
-const features = {}
+// Extra funkciók: oszlopszűrés (a szűrőket kívülről kapja a táblázat).
+const features = tableFeatures({
+  columnFilteringFeature,
+  filteredRowModel: createFilteredRowModel(),
+})
 
 // --------------------------------------------------
 // 2. A komponens bemeneti típusai
@@ -22,10 +32,17 @@ type CellValue = React.ReactNode | Date | bigint | object
 // Rekord = tetszőleges számú és típusú cellák.
 type MatrixRow = CellValue[]
 
+// Egy oszlopszűrő: a `column` fejlécű oszlopban csak a value-val pontosan egyező cellájú sorok maradnak meg.
+export interface TableColumnFilter {
+  column: string,
+  value: unknown,
+}
+
 interface VirtualTableProps {
   headers: string[],
   columnWidths?: number[],
   data: MatrixRow[],
+  columnFilters?: readonly TableColumnFilter[],
   renderCell?: (
     value: unknown,
     rowIndex: number,
@@ -79,6 +96,7 @@ export function VirtualizedTable({
   headers,
   columnWidths,
   data,
+  columnFilters,
   renderCell,
 }: VirtualTableProps) {
   // A görgethető HTML-elem referenciája. Ezt figyeli majd a virtualizáló.
@@ -98,6 +116,17 @@ export function VirtualizedTable({
     [headers, data],
   )
 
+  // A fejléc alapján megadott szűrők átalakítása a Table v9 oszlopazonosítóira.
+  const unknownFilterColumn = columnFilters?.find((filter) => !headers.includes(filter.column))?.column
+  const tableColumnFilters = useMemo(
+    () =>
+      (columnFilters ?? []).map((filter) => ({
+        id: `column-${headers.indexOf(filter.column)}`,
+        value: filter.value,
+      })),
+    [headers, columnFilters],
+  )
+
   // Az oszlopok tényleges szélességei: a megadott tömb, vagy az alapértelmezett szélesség.
   const widths = columnWidths ?? headers.map(() => DEFAULT_CELL_WIDTH)
   const tableWidth = widths.reduce((sum, width) => sum + width, 0)
@@ -115,6 +144,7 @@ export function VirtualizedTable({
             {
               id: `column-${columnIndex}`,
               header,
+              filterFn: filterFn_equals,
               cell: (info) => renderCell? renderCell(info.getValue(),info.row.index,columnIndex,): formatCellValue(info.getValue()),
             },
           ),
@@ -132,6 +162,7 @@ export function VirtualizedTable({
       features,
       columns,
       data,
+      state: { columnFilters: tableColumnFilters },
     },
     (state) => state,
   )
@@ -169,6 +200,14 @@ export function VirtualizedTable({
         Hibás táblázatbeállítás: a megadott oszlopszélességek
         száma ({columnWidths.length}) nem egyezik a fejlécek
         számával ({headers.length}).
+      </div>
+    )
+  }
+
+  if (unknownFilterColumn !== undefined) {
+    return (
+      <div role="alert" className="heatmap-empty">
+        Hibás táblázatszűrő: nincs „{unknownFilterColumn}” nevű oszlop.
       </div>
     )
   }

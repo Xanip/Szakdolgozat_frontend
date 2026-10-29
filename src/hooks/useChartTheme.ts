@@ -15,9 +15,13 @@ export type ChartTheme = {
   grid: string;
   tooltipBg: string;
   tooltipBorder: string;
+  /** Categorical colors from `--chart-1..5`. */
+  palette: string[];
 };
 
-const VARIABLES: Record<keyof ChartTheme, string> = {
+const PALETTE_VARIABLES = ["--chart-1", "--chart-2", "--chart-3", "--chart-4", "--chart-5"];
+
+const VARIABLES: Record<Exclude<keyof ChartTheme, "palette">, string> = {
   line: "--chart-line",
   increase: "--chart-increase",
   decrease: "--chart-decrease",
@@ -31,7 +35,8 @@ const VARIABLES: Record<keyof ChartTheme, string> = {
 function readChartTheme(): ChartTheme {
   const styles = getComputedStyle(document.documentElement);
   const entries = Object.entries(VARIABLES).map(([key, cssVar]) => [key, styles.getPropertyValue(cssVar).trim()]);
-  return Object.fromEntries(entries) as ChartTheme;
+  const palette = PALETTE_VARIABLES.map((cssVar) => styles.getPropertyValue(cssVar).trim());
+  return { ...Object.fromEntries(entries), palette } as ChartTheme;
 }
 
 export function useChartTheme(): ChartTheme {
