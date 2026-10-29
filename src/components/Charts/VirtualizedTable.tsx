@@ -1,80 +1,253 @@
-//https://tanstack.com/table/latest/docs/framework/react/quick-start
+import React, { useMemo, useRef } from 'react'
+import {createColumnHelper,useTable,} from '@tanstack/react-table'
+import { useVirtualizer } from '@tanstack/react-virtual'
 
-import { tableFeatures, useTable } from '@tanstack/react-table'
-import type { ColumnDef } from '@tanstack/react-table'
+// --------------------------------------------------
+// 1. A táblázat alapbeállításai
+// --------------------------------------------------
+const DEFAULT_CELL_WIDTH = 180
 
-// 1. Define the shape of your data
-type Person = {
-  firstName: string
-  lastName: string
-  age: number
+// Extra funkciókat, pl rendezés, szűrés stb.
+const features = {}
+
+// --------------------------------------------------
+// 2. A komponens bemeneti típusai
+// --------------------------------------------------
+
+// Egy cella tetszőleges értéket tartalmazhat. Explicit típusként
+// használjuk, hogy az accessor ne `unknown`-ra, hanem valódi
+// értéktípusra oldódjon fel (különben DisplayColumnDef lenne).
+type CellValue = React.ReactNode | Date | bigint | object
+
+// Rekord = tetszőleges számú és típusú cellák.
+type MatrixRow = CellValue[]
+
+interface VirtualTableProps {
+  headers: string[],
+  columnWidths?: number[],
+  data: MatrixRow[],
+  renderCell?: (
+    value: unknown,
+    rowIndex: number,
+    columnIndex: number,
+  ) => React.ReactNode
 }
 
-// 2. Give your data a stable reference (module scope, useState, useQuery, etc.)
-const data: Array<Person> = [
-  { firstName: 'tanner', lastName: 'linsley', age: 24 },
-  { firstName: 'tandy', lastName: 'miller', age: 40 },
-  { firstName: 'joe', lastName: 'dirte', age: 45 },
-]
+// A Table v9 oszlopsegédje a mátrix egy-egy indexét fogja olvasni.
+const columnHelper = createColumnHelper<typeof features, MatrixRow>()
 
-// 3. New in v9: declare which features this table uses (none yet)
-const features = tableFeatures({})
+// --------------------------------------------------
+// 3. Cellák alapértelmezett megjelenítése
+// --------------------------------------------------
 
-// 4. Define your columns
-const columns: Array<ColumnDef<typeof features, Person>> = [
-  {
-    accessorKey: 'firstName', // accessorKey shorthand
-    header: 'First Name',
-    cell: (info) => info.getValue(),
-  },
-  {
-    accessorFn: (row) => row.lastName, // accessorFn alternative with a custom id
-    id: 'lastName',
-    header: () => <span>Last Name</span>,
-    cell: (info) => <i>{info.getValue<string>()}</i>,
-  },
-  {
-    accessorKey: 'age',
-    header: () => 'Age',
-  },
-]
+function formatCellValue(value: unknown): React.ReactNode {
+  // A React-elemeket közvetlenül megjeleníthetjük.
+  if (React.isValidElement(value)) {
+    return value
+  }
 
-export function VirtualizedTable() {
-  // 5. Create the table instance
-  const table = useTable({
-    key: 'person-table', // needed for devtools, omit if you don't want to use the devtools
-    features,
-    columns,
-    data,
+  if (value === null || value === undefined) {
+    return ''
+  }
+
+  if (
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean' ||
+    typeof value === 'bigint'
+  ) {
+    return String(value)
+  }
+
+  if (value instanceof Date) {
+    return value.toLocaleString('hu-HU')
+  }
+
+  // Összetett objektumoknál JSON-szöveget mutatunk.
+  try {
+    return JSON.stringify(value) ?? String(value)
+  } catch {
+    return String(value)
+  }
+}
+
+// --------------------------------------------------
+// 4. A VirtualTable komponens
+// --------------------------------------------------
+
+export function VirtualizedTable({
+  headers,
+  columnWidths,
+  data,
+  renderCell,
+}: VirtualTableProps) {
+  // A görgethető HTML-elem referenciája. Ezt figyeli majd a virtualizáló.
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Ha kívülről adtak meg szélességeket, minden oszlopra meg kell adni.
+  const columnWidthsMismatch = columnWidths !== undefined && columnWidths.length !== headers.length
+
+  // Ellenőrizzük, hogy minden adatsorban ugyanannyi cella van-e, mint ahány fejlécet megadtunk.
+  const invalidRowIndex = useMemo(
+    () =>
+      data.findIndex(
+        (row) =>
+          !Array.isArray(row) ||
+          row.length !== headers.length,
+      ),
+    [headers, data],
+  )
+
+  // Az oszlopok tényleges szélességei: a megadott tömb, vagy az alapértelmezett szélesség.
+  const widths = columnWidths ?? headers.map(() => DEFAULT_CELL_WIDTH)
+  const tableWidth = widths.reduce((sum, width) => sum + width, 0)
+
+  // ------------------------------------------------
+  // 5. Oszlopdefiníciók létrehozása
+  // ------------------------------------------------
+
+  const columns = useMemo(
+    () =>
+      columnHelper.columns(
+        headers.map((header, columnIndex) =>
+          columnHelper.accessor(
+            (row): CellValue => row[columnIndex] as CellValue,
+            {
+              id: `column-${columnIndex}`,
+              header,
+              cell: (info) => renderCell? renderCell(info.getValue(),info.row.index,columnIndex,): formatCellValue(info.getValue()),
+            },
+          ),
+        ),
+      ),
+    [headers, renderCell],
+  )
+
+  // ------------------------------------------------
+  // 6. A TanStack Table modellje
+  // ------------------------------------------------
+
+  const table = useTable(
+    {
+      features,
+      columns,
+      data,
+    },
+    (state) => state,
+  )
+
+  // A Table v9 által előállított sorok.
+  const { rows } = table.getRowModel()
+
+  // ------------------------------------------------
+  // 7. Virtualizáció mért sormagassággal
+  // ------------------------------------------------
+
+  const rowVirtualizer = useVirtualizer<HTMLDivElement,HTMLTableRowElement>({
+    // A virtualizálható adatsorok száma.
+    count: rows.length,
+
+    // Becsült sormagasság; a tényleges magasságot mérjük.
+    estimateSize: () => 50,
+
+    // A görgetést figyelő HTML-elem.
+    getScrollElement: () => containerRef.current,
+
+    overscan: 5,
+    measureElement: (element) => element.getBoundingClientRect().height,
   })
 
-  // 6. Render markup from the table instance APIs
+  // ------------------------------------------------
+  // 8. Hibás adatszerkezet kezelése
+  // ------------------------------------------------
+
+  // A hookokat a feltételes visszatérés előtt hívtuk meg,
+  // így a komponens hook-sorrendje stabil marad.
+  if (columnWidthsMismatch) {
+    return (
+      <div role="alert" className="heatmap-empty">
+        Hibás táblázatbeállítás: a megadott oszlopszélességek
+        száma ({columnWidths.length}) nem egyezik a fejlécek
+        számával ({headers.length}).
+      </div>
+    )
+  }
+
+  if (invalidRowIndex !== -1) {
+    return (
+      <div role="alert" className="heatmap-empty">
+        Hibás táblázatadat: a(z) {invalidRowIndex + 1}.
+        sorban a cellák száma nem egyezik a fejlécek számával.
+        Elvárt oszlopszám: {headers.length}.
+      </div>
+    )
+  }
+
+  // ------------------------------------------------
+  // 9. Fejléc és virtualizált sorok megjelenítése
+  // ------------------------------------------------
+
   return (
-    <table>
-      <thead>
-        {table.getHeaderGroups().map((headerGroup) => (
-          <tr key={headerGroup.id}>
-            {headerGroup.headers.map((header) => (
-              <th key={header.id}>
-                {header.isPlaceholder ? null : (
-                  <table.FlexRender header={header} />
-                )}
-              </th>
+    <div className="heatmap vtable">
+      <div ref={containerRef} className="heatmap-scroll" tabIndex={0}>
+        <table className="vtable-table" style={{ width: tableWidth }}>
+          {/* Sticky header */}
+          <thead className="heatmap-col-header">
+            {table.getHeaderGroups().map((headerGroup) => (
+              <tr
+                key={headerGroup.id}
+                className="vtable-row vtable-header-row"
+                style={{ width: tableWidth }}
+              >
+                {headerGroup.headers.map((header, columnIndex) => (
+                  <th
+                    key={header.id}
+                    className="vtable-th"
+                    style={{ width: widths[columnIndex] }}
+                  >
+                    <table.FlexRender header={header} />
+                  </th>
+                ))}
+              </tr>
             ))}
-          </tr>
-        ))}
-      </thead>
-      <tbody>
-        {table.getRowModel().rows.map((row) => (
-          <tr key={row.id}>
-            {row.getAllCells().map((cell) => (
-              <td key={cell.id}>
-                <table.FlexRender cell={cell} />
-              </td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
+          </thead>
+
+          <tbody
+            className="heatmap-body"
+            style={{
+              height: rowVirtualizer.getTotalSize(),
+              width: tableWidth,
+            }}
+          >
+            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+              const row = rows[virtualRow.index]
+
+              return (
+                <tr
+                  key={row.id}
+                  data-index={virtualRow.index}
+                  ref={(node)=>{if(node){rowVirtualizer.measureElement(node)}}}
+                  className="vtable-row vtable-body-row"
+                  style={{
+                    width: tableWidth,
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                >
+                  {row.getAllCells().map((cell, columnIndex) => (
+                    <td
+                      key={cell.id}
+                      className="vtable-cell"
+                      style={{ width: widths[columnIndex] }}
+                    >
+                      <table.FlexRender cell={cell} />
+                    </td>
+                  ))}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
   )
 }

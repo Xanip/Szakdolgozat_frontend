@@ -328,6 +328,24 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--ring); outline-
 .heatmap-echarts:focus-visible { outline: 3px solid color-mix(in srgb, var(--ring) 45%, transparent); outline-offset: 2px; }
 .heatmap-compare { display: grid; gap: 20px; }
 
+/* Virtualized table (VirtualizedTable.tsx).
+   Reuses the heatmap frame (.heatmap), scroll box (.heatmap-scroll), sticky
+   header (.heatmap-col-header) and body (.heatmap-body). `.vtable` sets the
+   frame height; the scroll box fills it, so the table height follows the frame.
+   Column widths and row positions are computed at runtime and stay inline. */
+.vtable { display: flex; height: clamp(320px, 60vh, 640px); min-width: 0; flex-direction: column; }
+.vtable .heatmap-scroll { flex: 1; min-height: 0; max-height: none; }
+.vtable-table, .vtable-table > thead, .vtable-table > tbody { display: grid; }
+.vtable-table { min-width: 100%; border-collapse: collapse; }
+.vtable-row { display: flex; }
+.vtable-header-row { height: 40px; }
+.vtable-body-row { position: absolute; top: 0; left: 0; transition: background 120ms ease; }
+.vtable-body-row:hover { background: color-mix(in srgb, var(--secondary) 60%, transparent); }
+.vtable-th, .vtable-cell { display: flex; flex: none; align-items: center; overflow: hidden; padding: 0 10px; text-align: left; }
+.vtable-th { color: var(--muted-foreground); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; }
+.vtable-cell { border-bottom: 1px solid var(--border); padding-block: 8px; color: var(--foreground); font-size: 0.8rem; line-height: 1.4; white-space: normal; overflow-wrap: anywhere; }
+.vtable-cell a { color: var(--primary); text-decoration: underline; text-underline-offset: 2px; }
+
 /* 11b. Page widget responsiveness -------------------------------------------
    Container queries on `.content-area` (not viewport media queries), so the
    layout also reacts to the sidebar collapsing/expanding, not just the window.
