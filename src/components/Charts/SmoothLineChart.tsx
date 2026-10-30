@@ -1,6 +1,7 @@
 import ReactECharts from "echarts-for-react";
 import type { EChartsOption } from "echarts";
 import { useChartTheme } from "@/hooks/useChartTheme";
+import { zoomOptions } from "./chartZoom";
 
 interface SmoothLineChartProps {
   dates: string[] | null;
@@ -27,6 +28,7 @@ const colors = useChartTheme();
       borderColor: colors.tooltipBorder,
       textStyle: { color: colors.text },
     },
+    ...zoomOptions(colors),
     grid: {
       left: 55,
       right: 24,

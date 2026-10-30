@@ -294,6 +294,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--ring); outline-
 /* Chart row: each chart sits in a card panel; ECharts auto-resizes to the panel. */
 .chart-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
 .chart-panel { height: clamp(280px, 42vh, 400px); min-width: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--card); padding: 12px 8px 4px; }
+.prediction-chart-panel { height: clamp(420px, 65vh, 760px); }
 
 /* Media Analytics: donut and bar chart share one frame, side by side (35% / 65%)
    when the content area is wide enough (see @container below), stacked otherwise.
@@ -391,6 +392,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--ring); outline-
   .filter-field .currency-trigger, .filter-field .period-picker { width: 100%; }
   .period-picker .period-picker-select { flex: 1; width: auto; }
   .chart-panel { height: 280px; padding: 8px 4px 0; }
+  .prediction-chart-panel { height: 380px; }
   .media-chart-frame { padding: 8px 4px 0; }
   .media-chart-cell { height: 308px; }
 }
