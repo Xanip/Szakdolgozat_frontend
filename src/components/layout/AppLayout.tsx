@@ -9,6 +9,7 @@ import { defaultRoutePath, routes } from "@/lib/routes";
 import { FxPerformancePage } from "../pages/fx_performance";
 import { DailyHeatmapsPage } from "../pages/daily_heatmap";
 import { MediaAnalyticsPage } from "../pages/media_analitics";
+import { PredictionsPage } from "../pages/predictions";
 
 /**
  * Application shell: sidebar + header + routed main content.
@@ -75,6 +76,11 @@ export function AppLayout() {
                 key="/media-analytics"
                 path="/media-analytics"
                 element={<MediaAnalyticsPage route={routes[2]}/>}
+              />
+              <Route
+                key="/predictions"
+                path="/predictions"
+                element={<PredictionsPage route={routes[3]}/>}
               />
             </Routes>
           </DimensionDataGate>

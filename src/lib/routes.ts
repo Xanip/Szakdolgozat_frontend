@@ -1,4 +1,4 @@
-import { BarChart3, LineChart, Newspaper } from "lucide-react";
+import { BarChart3, LineChart, Newspaper, TrendingUpDown } from "lucide-react";
 
 import type { RouteConfig } from "@/types/navigation";
 
@@ -26,8 +26,14 @@ export const routes: RouteConfig[] = [
   {
     path: "/media-analytics",
     title: "Media Analytics",
-    description: "Review the relationship between currencies and news.",
+    description: "Review economic news.",
     icon: Newspaper,
+  },
+    {
+    path: "/predictions",
+    title: "Exchange Rate Forecasting",
+    description: "Explore predictions for exchange rates.",
+    icon: TrendingUpDown,
   },
 ];
 

@@ -46,3 +46,12 @@ export type MediaCrossSelection = {
 export type MediaCrossFilter = MediaCrossSelection & {
   range: MediaDateRange;
 };
+
+export type PredictionFilters = {
+  baseCurrency: string | null;
+  targetCurrency: string | null;
+  /**
+   * Internal, client-side filter: which prediction model the chart shows.
+   */
+  predictionMode: string | null;
+};

@@ -89,3 +89,21 @@ export type MediaChartData = {
   /** articles per source. */
   sources: MediaChartSeries;
 };
+
+//**Data for one prediction series */
+export type PredictionSeries = {
+  dates: string[];
+  predictedRate: number[];
+  lowerBound: number[];
+  upperBound: number[];
+};
+
+//**Data for one prediction API data with full history and all predictions */
+export type PredictionsData = {
+  baseCurrency: string;
+  targetCurrency: string;
+  history: {date: string[], rate:number[]};
+  modes: string[];
+  byMode: Record<string, PredictionSeries>;
+}
+

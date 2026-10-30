@@ -57,6 +57,26 @@ export type RawFxPerformanceResponse = {
   };
 };
 
+/** GET "/exchange-rates/pages/Prediction" */
+export type RawPredictionResponse = {
+  baseCurrency: string;
+  targetCurrency: string;
+  history: RawHistoryPoint[];
+  predictions: Record<string, RawPredictionPoint[]>;
+};
+
+export type RawHistoryPoint ={
+  date: string,
+  rate: number,
+}
+
+export type RawPredictionPoint ={
+  date: string;
+  predictedRate: number;
+  lowerBound: number;
+  upperBound: number;
+}
+
 /** GET /exchange-rates/pages/Daily_heatmap */
 export type RawDailyHeatmapResponse = {
   calculation_date: string | null;

@@ -3,6 +3,7 @@ import {
   buildDailyHeatmapParams,
   buildFxPerformanceParams,
   buildMediaAnalyticsParams,
+  buildPredictionParams,
   queryKeys,
 } from "@/lib/api/queryKeys";
 import {
@@ -19,6 +20,7 @@ import type {
   MediaAnalyticsFilters,
   MediaCrossFilter,
   MediaDateRange,
+  PredictionFilters,
 } from "@/types/filters";
 
 /**
@@ -43,6 +45,13 @@ export const INITIAL_MEDIA_ANALYTICS_FILTERS: MediaAnalyticsFilters = {
   toDate: null,
 };
 
+export const INITIAL_PREDICTION_FILTERS: PredictionFilters = {
+  baseCurrency: null,
+  targetCurrency: null,
+  predictionMode: null,
+};
+
+
 export type PageFilterStores = {
   fxPerformance: DebouncedState<FxPerformanceFilters>;
   dailyHeatmap: DebouncedState<DailyHeatmapFilters>;
@@ -50,6 +59,8 @@ export type PageFilterStores = {
   mediaAnalytics: DebouncedState<MediaAnalyticsFilters>;
   /** Cross-filter: applies immediately, never starts a request. */
   mediaCrossFilter: ImmediateState<MediaCrossFilter | null>;
+
+  prediction: DebouncedState<PredictionFilters>;
 };
 
 export type PageFilterOptions = {
@@ -59,6 +70,8 @@ export type PageFilterOptions = {
     dailyHeatmap?: DailyHeatmapFilters;
     mediaAnalytics?: MediaAnalyticsFilters;
     mediaCrossFilter?: MediaCrossFilter | null;
+    prediction?: PredictionFilters;
+
   };
 };
 
@@ -99,15 +112,26 @@ export function createPageFilterStores(
     );
   };
 
+  const activatePrediction = (filters: PredictionFilters) => {
+    const params = buildPredictionParams(filters);
+    registry.setActive(
+      "prediction",
+      params ? queryKeys.prediction(params) : null,
+    );
+  };
+
   const fxInitial = options.initial?.fxPerformance ?? INITIAL_FX_PERFORMANCE_FILTERS;
   const heatmapInitial =
     options.initial?.dailyHeatmap ?? INITIAL_DAILY_HEATMAP_FILTERS;
   const mediaInitial =
     options.initial?.mediaAnalytics ?? INITIAL_MEDIA_ANALYTICS_FILTERS;
+  const predictionInitial =
+    options.initial?.prediction ?? INITIAL_PREDICTION_FILTERS;
 
   activateFx(fxInitial);
   activateHeatmap(heatmapInitial);
   activateMedia(mediaInitial);
+  activatePrediction(predictionInitial);
 
   return {
     fxPerformance: createDebouncedState(fxInitial, {
@@ -125,6 +149,11 @@ export function createPageFilterStores(
     mediaCrossFilter: createImmediateState(
       options.initial?.mediaCrossFilter ?? null,
     ),
+    prediction: createDebouncedState(predictionInitial, {
+      delayMs,
+      onCommit: activatePrediction,
+    }),
+
   };
 }
 

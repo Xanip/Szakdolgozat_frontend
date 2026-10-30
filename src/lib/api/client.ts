@@ -13,6 +13,7 @@ export const ENDPOINTS = {
   fxPerformance: "/exchange-rates/pages/FX_performance",
   dailyHeatmap: "/exchange-rates/pages/Daily_heatmap",
   mediaAnalytics: "/exchange-rates/pages/Media_analytics",
+  predictions: "/exchange-rates/pages/Prediction"
 } as const;
 
 export type QueryParamValue =

@@ -124,3 +124,19 @@ export function validateResponse<T>(
     throw error;
   }
 }
+
+/**
+ * Validates an object with arbitrary string keys where every value decodes
+ * with `decoder`. The key names are not known ahead of time (e.g. prediction
+ * model names), so unlike `object` it does not enforce a fixed shape.
+ */
+export function record<T>(decoder: Decoder<T>): Decoder<Record<string, T>> {
+  return (value, path) => {
+    if (!isRecord(value)) fail(path, "expected an object");
+    const result: Record<string, T> = {};
+    for (const key of Object.keys(value)) {
+      result[key] = decoder(value[key], `${path}.${key}`);
+    }
+    return result;
+  };
+}

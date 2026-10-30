@@ -6,12 +6,19 @@ import type {
   FxPerformanceFilters,
   MediaAnalyticsFilters,
   MediaDateRange,
+  PredictionFilters,
 } from "@/types/filters";
 
 /*
  * Request parameters exactly as sent to the backend. Query keys embed these
  * objects unchanged, so a key always describes the actually requested data.
  */
+
+export type PredictionParams = {
+  BaseCurrency: string;
+  TargetCurrency: string;
+};
+
 
 export type FxPerformanceParams = {
   BaseCurrency: string;
@@ -42,7 +49,23 @@ export const queryKeys = {
     ["Daily_heatmap", params] as const,
   mediaAnalytics: (params: MediaAnalyticsParams | null) =>
     ["Media_analytics", params] as const,
+  
+  prediction: (params: PredictionParams | null) =>
+    ["Prediction", params] as const,
+
 };
+
+/** Builds Prediction params; `null` until both currencies are selected. */
+export function buildPredictionParams(
+  filters: PredictionFilters,
+): PredictionParams | null {
+  if (!filters.baseCurrency || !filters.targetCurrency) return null;
+  return {
+    BaseCurrency: filters.baseCurrency,
+    TargetCurrency: filters.targetCurrency,
+  };
+}
+
 
 /** Builds FX params; `null` until both currencies are selected. */
 export function buildFxPerformanceParams(
@@ -90,12 +113,14 @@ export function getMediaDateRange(queryKey: QueryKey): MediaDateRange | null {
 }
 
 /** Display roles; each page keeps exactly one active result. */
-export type ResultRole = "fxPerformance" | "dailyHeatmap" | "mediaAnalytics";
+export type ResultRole = "fxPerformance" | "dailyHeatmap" | "mediaAnalytics" |"prediction";
 
 const ROLE_BY_SCOPE: Readonly<Record<string, ResultRole>> = {
   FX_performance: "fxPerformance",
   Daily_heatmap: "dailyHeatmap",
   Media_analytics: "mediaAnalytics",
+  Prediction: "prediction",
+
 };
 
 /** Derives the role from a query key; `null` for untracked/idle keys. */

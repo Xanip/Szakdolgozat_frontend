@@ -7,7 +7,7 @@ import {
   toggleMediaCrossFilter,
   withMediaDateRange,
 } from "@/lib/filters/pageFilters";
-import type { FxPerformanceFilters, MediaCrossFilter } from "@/types/filters";
+import type { FxPerformanceFilters, MediaCrossFilter, PredictionFilters } from "@/types/filters";
 
 export function useAppData(): AppData {
   const appData = useContext(AppDataContext);
@@ -79,4 +79,15 @@ export function useMediaAnalyticsFilters() {
     [stores],
   );
   return { filters, setDateRange, crossFilter, toggleCrossFilter };
+}
+
+export function usePredictionFilters() {
+  const store = useAppData().filters.prediction;
+  const filters = useDraftFilters(store);
+  const setFilters = useCallback(
+    (patch: Partial<PredictionFilters>) =>
+      store.update((current) => ({ ...current, ...patch })),
+    [store],
+  );
+  return { filters, setFilters };
 }

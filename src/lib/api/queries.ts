@@ -10,11 +10,14 @@ import {
   type DailyHeatmapParams,
   type FxPerformanceParams,
   type MediaAnalyticsParams,
+  type PredictionParams,
 } from "@/lib/api/queryKeys";
 import { validateDailyHeatmapResponse } from "@/lib/api/validators/dailyHeatmap";
 import { validateDimensionsResponse } from "@/lib/api/validators/dimensions";
 import { validateFxPerformanceResponse } from "@/lib/api/validators/fxPerformance";
 import { validateMediaAnalyticsResponse } from "@/lib/api/validators/mediaAnalytics";
+import { validatePredictionResponse } from "./validators/predictions";
+import { processPrediction } from "./processors/predictions";
 
 type EndpointPipeline<TRaw, TData> = {
   path: string;
@@ -112,3 +115,23 @@ export function mediaAnalyticsQueryOptions(
       : skipToken,
   });
 }
+
+export function predictionQueryOptions(
+  params: PredictionParams | null,
+  http?: HttpGet,
+) {
+  return queryOptions({
+    queryKey: queryKeys.prediction(params),
+    placeholderData: keepPreviousData,
+    queryFn: params
+      ? createEndpointQueryFn({
+          path: ENDPOINTS.predictions,
+          params,
+          validate: validatePredictionResponse,
+          process: processPrediction,
+          http,
+        })
+      : skipToken,
+  });
+}
+
